@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Env
+.env
+.venv
+env/
+venv/
+
+# Alembic
+alembic/versions/*.py
+!alembic/versions/.gitkeep
+
+# Uploads
+uploads/
+
+# mypy / coverage
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Docker
+*.log

@@ -1,0 +1,9 @@
+from app.repositories.base_repository import BaseRepository
+from app.repositories.user_repository import OTPRepository, UserRepository
+from app.repositories.address_repository import AddressRepository
+from app.repositories.product_repository import CategoryRepository, ProductRepository
+from app.repositories.cart_repository import CartItemRepository, CartRepository
+from app.repositories.order_repository import OrderItemRepository, OrderRepository
+from app.repositories.order_tracking_repository import OrderTrackingRepository
+from app.repositories.offer_repository import OfferRepository
+from app.repositories.notification_repository import BannerRepository, NotificationRepository
