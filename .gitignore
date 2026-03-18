@@ -21,7 +21,7 @@ alembic/versions/*.py
 !alembic/versions/.gitkeep
 
 # Uploads
-uploads/
+# uploads/
 
 # mypy / coverage
 .mypy_cache/
