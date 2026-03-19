@@ -4,7 +4,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.models.order import Order, OrderItem, OrderStatus
 from app.repositories.base_repository import BaseRepository
@@ -32,7 +32,7 @@ class OrderRepository(BaseRepository[Order]):
         result = await self.db.execute(
             select(Order)
             .options(
-                selectinload(Order.items),
+                selectinload(Order.items).joinedload(OrderItem.product),
                 selectinload(Order.tracking),
                 selectinload(Order.user),
             )
@@ -47,7 +47,7 @@ class OrderRepository(BaseRepository[Order]):
         result = await self.db.execute(
             select(Order)
             .options(
-                selectinload(Order.items),
+                selectinload(Order.items).joinedload(OrderItem.product),
                 selectinload(Order.tracking),
             )
             .where(Order.user_id == user_id)
@@ -62,7 +62,7 @@ class OrderRepository(BaseRepository[Order]):
         result = await self.db.execute(
             select(Order)
             .options(
-                selectinload(Order.items),
+                selectinload(Order.items).joinedload(OrderItem.product),
                 selectinload(Order.tracking),
                 selectinload(Order.user),
             )
