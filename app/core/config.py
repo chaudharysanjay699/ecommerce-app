@@ -14,7 +14,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    PROJECT_NAME: str = "Ecom Delivery API"
+    PROJECT_NAME: str = "Vidharthi Store"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
 
@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     MAIL_USERNAME: str = ""
     MAIL_PASSWORD: str = ""
     MAIL_FROM: str = ""          # e.g. noreply@yourdomain.com
-    MAIL_FROM_NAME: str = "Ecom Grocery App"
+    MAIL_FROM_NAME: str = "Vidharthi Store"
     MAIL_SERVER: str = "smtp.gmail.com"
     MAIL_PORT: int = 587
     MAIL_STARTTLS: bool = True

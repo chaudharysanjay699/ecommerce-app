@@ -21,7 +21,7 @@ class UserRepository(BaseRepository[User]):
     async def get_by_phone(self, phone: str) -> User | None:
         """Return a user matching the given phone number."""
         result = await self.db.execute(
-            select(User).where(User.phone == phone)
+            select(User).where(User.phone == phone, User.is_active == True)
         )
         return result.scalars().first()
 
@@ -50,6 +50,18 @@ class UserRepository(BaseRepository[User]):
             .limit(limit)
         )
         return result.scalars().all()
+
+    async def get_admin_emails(self) -> list[str]:
+        """Return email addresses of all active admin users."""
+        result = await self.db.execute(
+            select(User.email)
+            .where(
+                User.is_admin == True,  # noqa: E712
+                User.is_active == True,  # noqa: E712
+                User.email.isnot(None),
+            )
+        )
+        return [row[0] for row in result.all() if row[0]]
 
 
 class OTPRepository(BaseRepository[OTP]):

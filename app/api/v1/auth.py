@@ -26,12 +26,12 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 # ── Registration & Login ──────────────────────────────────────────────────────
 
-@router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def register(
     payload: UserRegister,
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    """Create a new user account."""
+    """Create a new user account and return JWT tokens."""
     return await AuthService(db).register(payload)
 
 
@@ -69,10 +69,9 @@ async def send_otp(
     payload: OTPRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    """Send an OTP to the given phone number."""
-    code = await AuthService(db).send_otp(payload.phone)
-    # TODO: remove debug_code before going to production
-    return {"message": "OTP sent", "debug_code": code}
+    """Send an OTP to the given phone number or email."""
+    await AuthService(db).send_otp(payload.identifier)
+    return {"message": "OTP sent successfully"}
 
 
 @router.post("/otp/verify", response_model=TokenResponse)

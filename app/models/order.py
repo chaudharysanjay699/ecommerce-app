@@ -9,9 +9,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 from app.models.base import TimestampMixin, UUIDMixin
 
-DELIVERY_CHARGE_SINGLE = 10.0
-DELIVERY_CHARGE_MULTIPLE = 15.0
-
 
 class OrderStatus(str, enum.Enum):
     PLACED = "placed"

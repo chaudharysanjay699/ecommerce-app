@@ -35,15 +35,25 @@ class AdminLogin(BaseSchema):
 
 
 class OTPRequest(BaseSchema):
-    """Request an OTP to be sent to a phone number."""
+    """Request an OTP — accepts phone number or email address."""
 
-    phone: str = Field(..., pattern=r"^\+?[0-9]{7,15}$", examples=["+919876543210"])
+    identifier: str = Field(
+        ...,
+        min_length=3,
+        examples=["+919876543210", "john@example.com"],
+        description="Phone number or email address",
+    )
 
 
 class OTPVerify(BaseSchema):
-    """Submit OTP code to verify a phone number."""
+    """Submit OTP code to verify identity."""
 
-    phone: str = Field(..., examples=["+919876543210"])
+    identifier: str = Field(
+        ...,
+        min_length=3,
+        examples=["+919876543210", "john@example.com"],
+        description="Phone number or email address used when requesting the OTP",
+    )
     code: str = Field(..., min_length=4, max_length=6, examples=["123456"])
 
 

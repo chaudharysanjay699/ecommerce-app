@@ -20,6 +20,7 @@ from app.schemas.order import AdminOrderCancel, OrderOut, OrderStatusUpdate
 from app.schemas.order_tracking import OrderTrackingOut
 from app.schemas.product import CategoryCreate, CategoryOut, CategoryUpdate, CategoryWithChildrenOut, ProductCreate, ProductDetailOut, ProductOut, ProductUpdate, StockAdjust
 from app.schemas.user import AdminUserUpdate, UserOut
+from app.schemas.app_settings import AppSettingsOut, AppSettingsUpdate
 from app.services.notification_service import BannerService
 from app.services.offer_service import OfferService
 from app.services.order_service import OrderService
@@ -669,3 +670,61 @@ async def upload_banner_image(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
+
+
+# ── App Settings ──────────────────────────────────────────────────────────────
+
+@router.get("/settings", response_model=AppSettingsOut)
+async def get_app_settings(
+    _: Admin,
+    db: DB,
+):
+    """Get all application settings."""
+    from app.repositories.app_settings_repository import AppSettingsRepository
+    return await AppSettingsRepository(db).get_settings()
+
+
+@router.patch("/settings", response_model=AppSettingsOut)
+async def update_app_settings(
+    payload: AppSettingsUpdate,
+    _: Admin,
+    db: DB,
+):
+    """Update application settings."""
+    from app.repositories.app_settings_repository import AppSettingsRepository
+    
+    update_data = payload.model_dump(exclude_unset=True)
+    updated = await AppSettingsRepository(db).update_settings(update_data)
+    await db.commit()
+    return updated
+
+
+@router.get("/settings/today-orders-count")
+async def get_today_orders_count(
+    _: Admin,
+    db: DB,
+):
+    """Get the count of orders placed today (for monitoring order limits)."""
+    from datetime import datetime, timezone
+    
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    result = await db.execute(
+        select(func.count())
+        .select_from(Order)
+        .where(Order.created_at >= today_start)
+    )
+    today_count = result.scalar_one()
+    
+    from app.repositories.app_settings_repository import AppSettingsRepository
+    s = await AppSettingsRepository(db).get_settings()
+    
+    return {
+        "today_orders_count": today_count,
+        "daily_order_limit": s.daily_order_limit,
+        "order_limit_enabled": s.order_limit_enabled,
+        "limit_reached": (
+            s.order_limit_enabled 
+            and s.daily_order_limit is not None 
+            and today_count >= s.daily_order_limit
+        ),
+    }

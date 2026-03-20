@@ -4,13 +4,12 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import HTTPException, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.fcm import send_push
 from app.models.notification import Notification
 from app.models.order import (
-    DELIVERY_CHARGE_MULTIPLE,
-    DELIVERY_CHARGE_SINGLE,
     Order,
     OrderItem,
     OrderStatus,
@@ -18,21 +17,22 @@ from app.models.order import (
 from app.models.order_tracking import OrderTracking
 from app.models.product import CategoryType
 from app.repositories.address_repository import AddressRepository
+from app.repositories.app_settings_repository import AppSettingsRepository
 from app.repositories.cart_repository import CartRepository
 from app.repositories.notification_repository import DeviceTokenRepository, NotificationRepository
 from app.repositories.offer_repository import OfferRepository
 from app.repositories.order_repository import OrderRepository
 from app.repositories.product_repository import ProductRepository
+from app.repositories.user_repository import UserRepository
 from app.schemas.order import AdminOrderCancel, OrderCreate, OrderStatusUpdate
-
-VEGETABLE_ORDER_START_HOUR = 5  # 5 AM UTC
-VEGETABLE_ORDER_END_HOUR = 9    # 9 AM UTC
+from app.services.email_service import send_admin_order_email, send_invoice_email
 
 
 class OrderService:
     """Complete order lifecycle business logic."""
 
     def __init__(self, db: AsyncSession) -> None:
+        self.db = db
         self.order_repo = OrderRepository(db)
         self.cart_repo = CartRepository(db)
         self.product_repo = ProductRepository(db)
@@ -40,6 +40,8 @@ class OrderService:
         self.address_repo = AddressRepository(db)
         self.notif_repo = NotificationRepository(db)
         self.device_repo = DeviceTokenRepository(db)
+        self.user_repo = UserRepository(db)
+        self.settings_repo = AppSettingsRepository(db)
 
     # ── Order creation ────────────────────────────────────────────────────────
 
@@ -47,18 +49,46 @@ class OrderService:
         """Create an order from the user's current cart.
 
         Steps:
-        1. Validate cart is non-empty
-        2. Resolve delivery address
-        3. Enforce vegetable order time window (5–9 AM UTC)
-        4. Validate stock per item
-        5. Apply active offer discount per item
-        6. Calculate delivery charge (single item: 10, multiple: 15)
-        7. Persist order + order items
-        8. Deduct stock (auto-flag out-of-stock)
-        9. Bulk-clear cart
-        10. Insert first tracking event (PLACED)
-        11. Send order confirmation notification
+        1. Check maintenance mode
+        2. Check daily order limit (if enabled)
+        3. Validate cart is non-empty
+        4. Resolve delivery address
+        5. Enforce vegetable order time window (from DB settings)
+        6. Validate stock per item
+        7. Apply active offer discount per item
+        8. Calculate delivery charge (from DB settings)
+        9. Persist order + order items
+        10. Deduct stock (auto-flag out-of-stock)
+        11. Bulk-clear cart
+        12. Insert first tracking event (PLACED)
+        13. Send order confirmation notification
         """
+        # ── Check daily order limit ──────────────────────────────────────────
+        settings = await self.settings_repo.get_settings()
+
+        # ── Maintenance mode check ───────────────────────────────────────────
+        if settings.maintenance_mode:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=settings.maintenance_message,
+            )
+
+        if settings.order_limit_enabled and settings.daily_order_limit is not None:
+            # Count orders placed today
+            today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+            result = await self.db.execute(
+                select(func.count())
+                .select_from(Order)
+                .where(Order.created_at >= today_start)
+            )
+            today_orders_count = result.scalar_one()
+            
+            if today_orders_count >= settings.daily_order_limit:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=settings.order_limit_message,
+                )
+        
         cart = await self.cart_repo.get_by_user_id(user_id)
         if not cart or not cart.items:
             raise HTTPException(
@@ -81,14 +111,15 @@ class OrderService:
 
         # ── Vegetable time-window check ──────────────────────────────────────
         now_utc = datetime.now(timezone.utc)
-        for item in cart.items:
-            product = await self.product_repo.get_with_category(item.product_id)
-            if product and product.category and product.category.type == CategoryType.VEGETABLE:
-                if not (VEGETABLE_ORDER_START_HOUR <= now_utc.hour < VEGETABLE_ORDER_END_HOUR):
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Vegetable orders are only accepted between 5 AM and 9 AM UTC",
-                    )
+        if settings.veg_order_enabled:
+            for item in cart.items:
+                product = await self.product_repo.get_with_category(item.product_id)
+                if product and product.category and product.category.type == CategoryType.VEGETABLE:
+                    if not (settings.veg_order_start_hour <= now_utc.hour < settings.veg_order_end_hour):
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Vegetable orders are only accepted between {settings.veg_order_start_hour}:00 and {settings.veg_order_end_hour}:00 UTC",
+                        )
 
         # ── Stock validation, offer application, build order items ───────────
         order_items: list[OrderItem] = []
@@ -129,7 +160,8 @@ class OrderService:
 
         # ── Delivery charge ──────────────────────────────────────────────────
         delivery_charge = (
-            DELIVERY_CHARGE_SINGLE if len(cart.items) == 1 else DELIVERY_CHARGE_MULTIPLE
+            float(settings.delivery_charge_single) if len(cart.items) == 1
+            else float(settings.delivery_charge_multiple)
         )
         total = round(subtotal + delivery_charge, 2)
 
@@ -171,6 +203,7 @@ class OrderService:
             user_id=user_id,
             title="Order Placed",
             body=f"Your order #{order.id} has been placed. Total: ₹{total}",
+            order_id=order.id,
         )
         self.notif_repo.db.add(notif)
 
@@ -181,7 +214,19 @@ class OrderService:
 
         admin_tokens = await self.device_repo.get_all_admin_tokens()
         await send_push(admin_tokens, "New Order Received 🛎️", f"New order received: Order #{order.id}")
-        return await self.order_repo.get_full(order.id)
+
+        full_order = await self.order_repo.get_full(order.id)
+
+        # ── Send invoice email to customer ───────────────────────────────────
+        user = await self.user_repo.get_by_id(user_id)
+        if user and user.email:
+            await send_invoice_email(user.email, full_order, store_name=settings.store_name)
+
+        # ── Send admin email notification ────────────────────────────────────
+        admin_emails = await self.user_repo.get_admin_emails()
+        await send_admin_order_email(admin_emails, full_order, event="New Order Placed", store_name=settings.store_name)
+
+        return full_order
 
     # ── Customer queries ──────────────────────────────────────────────────────
 
@@ -256,6 +301,7 @@ class OrderService:
             user_id=order.user_id,
             title="Order Cancelled",
             body=f"Your order #{order.id} was cancelled. Reason: {payload.reason}",
+            order_id=order.id,
         )
         self.notif_repo.db.add(notif)
         await self.order_repo.db.flush()
@@ -264,7 +310,14 @@ class OrderService:
         tokens = await self.device_repo.get_tokens_for_user(order.user_id)
         await send_push(tokens, "Order Cancelled ❌", f"Your order #{order.id} was cancelled. Reason: {payload.reason}")
 
-        return await self.order_repo.get_full(order.id)
+        full_order = await self.order_repo.get_full(order.id)
+
+        # Admin email notification
+        admin_emails = await self.user_repo.get_admin_emails()
+        app_settings = await self.settings_repo.get_settings()
+        await send_admin_order_email(admin_emails, full_order, event="Order Cancelled", store_name=app_settings.store_name)
+
+        return full_order
 
     async def admin_update_status(
         self, order_id: UUID, payload: OrderStatusUpdate
@@ -306,6 +359,7 @@ class OrderService:
             user_id=order.user_id,
             title="Order Update",
             body=f"Your order #{order.id} status is now: {payload.status.value}.",
+            order_id=order.id,
         )
         self.notif_repo.db.add(notif)
         await self.order_repo.db.flush()
@@ -325,4 +379,15 @@ class OrderService:
         tokens = await self.device_repo.get_tokens_for_user(order.user_id)
         await send_push(tokens, title, body)
 
-        return await self.order_repo.get_full(order.id)
+        full_order = await self.order_repo.get_full(order.id)
+
+        # Admin email notification for status updates
+        admin_emails = await self.user_repo.get_admin_emails()
+        app_settings = await self.settings_repo.get_settings()
+        await send_admin_order_email(
+            admin_emails, full_order,
+            event=f"Order Status: {payload.status.value.replace('_', ' ').title()}",
+            store_name=app_settings.store_name,
+        )
+
+        return full_order
