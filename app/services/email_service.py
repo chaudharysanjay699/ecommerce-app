@@ -331,3 +331,88 @@ async def send_admin_order_email(
         recipients=admin_emails,
         html_body=_build_admin_order_email_html(order, event, store_name=name),
     )
+
+
+# ── Customer order status email ──────────────────────────────────────────────
+
+def _build_customer_order_status_html(order: Any, event: str, store_name: str | None = None) -> str:
+    """Build an HTML email for customer order status updates."""
+    store = store_name or settings.PROJECT_NAME
+
+    status_info = {
+        "confirmed": {"color": "#4CAF50", "icon": "✅", "message": "Your order has been confirmed!"},
+        "packed": {"color": "#2196F3", "icon": "📦", "message": "Your order has been packed and is ready for dispatch!"},
+        "out_for_delivery": {"color": "#FF9800", "icon": "🚚", "message": "Your order is out for delivery!"},
+        "delivered": {"color": "#4CAF50", "icon": "🎉", "message": "Your order has been delivered!"},
+        "cancelled": {"color": "#F44336", "icon": "❌", "message": "Your order has been cancelled."},
+    }
+    info = status_info.get(order.status.value, {"color": "#2196F3", "icon": "📦", "message": "Your order status has been updated."})
+
+    items_rows = ""
+    for item in order.items:
+        product_name = item.product.name if item.product else str(item.product_id)
+        items_rows += (
+            f"<tr>"
+            f"<td style='padding:8px;border-bottom:1px solid #eee'>{product_name}</td>"
+            f"<td style='padding:8px;border-bottom:1px solid #eee;text-align:center'>{item.quantity}</td>"
+            f"<td style='padding:8px;border-bottom:1px solid #eee;text-align:right'>₹{item.unit_price:.2f}</td>"
+            f"<td style='padding:8px;border-bottom:1px solid #eee;text-align:right'>₹{item.subtotal:.2f}</td>"
+            f"</tr>"
+        )
+
+    cancel_section = ""
+    if order.cancel_reason:
+        cancel_section = f"""<div style="margin-top:15px;padding:12px;background:#ffebee;border-left:4px solid #F44336;border-radius:4px">
+<p style="margin:0;color:#c62828;font-size:14px"><strong>Reason:</strong> {order.cancel_reason}</p>
+</div>"""
+
+    return f"""
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
+        <div style="text-align:center;margin-bottom:20px">
+            <h1 style="color:{info['color']};margin:0">{store}</h1>
+        </div>
+        <div style="text-align:center;padding:20px;background:{info['color']};border-radius:8px;margin-bottom:20px">
+            <div style="font-size:36px;margin-bottom:10px">{info['icon']}</div>
+            <h2 style="color:white;margin:0">{event}</h2>
+            <p style="color:rgba(255,255,255,0.9);margin:8px 0 0">{info['message']}</p>
+        </div>
+        <div style="background:#f9f9f9;padding:15px;border-radius:8px;margin-bottom:20px">
+            <p style="margin:5px 0"><strong>Order ID:</strong> {order.id}</p>
+            <p style="margin:5px 0"><strong>Status:</strong> {order.status.value.replace('_', ' ').title()}</p>
+            <p style="margin:5px 0"><strong>Delivery Address:</strong> {order.delivery_address}</p>
+        </div>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
+            <thead>
+                <tr style="background:{info['color']};color:white">
+                    <th style="padding:10px;text-align:left">Product</th>
+                    <th style="padding:10px;text-align:center">Qty</th>
+                    <th style="padding:10px;text-align:right">Price</th>
+                    <th style="padding:10px;text-align:right">Subtotal</th>
+                </tr>
+            </thead>
+            <tbody>{items_rows}</tbody>
+        </table>
+        <div style="text-align:right;margin-bottom:20px">
+            <p style="margin:5px 0">Subtotal: <strong>₹{order.subtotal:.2f}</strong></p>
+            <p style="margin:5px 0">Delivery: <strong>₹{order.delivery_charge:.2f}</strong></p>
+            <hr style="border:1px solid {info['color']}">
+            <p style="font-size:18px;margin:5px 0">Total: <strong style="color:{info['color']}">₹{order.total:.2f}</strong></p>
+        </div>
+        {cancel_section}
+        <p style="text-align:center;color:#999;font-size:12px">
+            Thank you for shopping with {store}!
+        </p>
+    </div>
+    """
+
+
+async def send_order_status_email(
+    email: str, order: Any, event: str = "Order Update", *, store_name: str | None = None
+) -> None:
+    """Send an order status update email to the customer."""
+    name = store_name or settings.PROJECT_NAME
+    await _send_mail(
+        subject=f"{event}: Order #{order.id} — {name}",
+        recipients=[email],
+        html_body=_build_customer_order_status_html(order, event, store_name=name),
+    )

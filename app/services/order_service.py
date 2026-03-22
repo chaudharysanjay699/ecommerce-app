@@ -112,13 +112,20 @@ class OrderService:
         # ── Vegetable time-window check ──────────────────────────────────────
         now_utc = datetime.now(timezone.utc)
         if settings.veg_order_enabled:
+            # Convert UTC to IST (UTC + 5:30)
+            from datetime import timedelta
+            ist_offset = timedelta(hours=5, minutes=30)
+            now_ist = now_utc + ist_offset
+            ist_hour = now_ist.hour
+            
             for item in cart.items:
                 product = await self.product_repo.get_with_category(item.product_id)
                 if product and product.category and product.category.type == CategoryType.VEGETABLE:
-                    if not (settings.veg_order_start_hour <= now_utc.hour < settings.veg_order_end_hour):
+                    # Allow orders ONLY between 5 AM and 9 AM IST
+                    if not (settings.veg_order_start_hour <= ist_hour < settings.veg_order_end_hour):
                         raise HTTPException(
                             status_code=status.HTTP_400_BAD_REQUEST,
-                            detail=f"Vegetable orders are only accepted between {settings.veg_order_start_hour}:00 and {settings.veg_order_end_hour}:00 UTC",
+                            detail=f"Vegetable orders are only accepted between {settings.veg_order_start_hour}:00 and {settings.veg_order_end_hour}:00 AM IST. Please place your order during this time window.",
                         )
 
         # ── Stock validation, offer application, build order items ───────────
@@ -381,13 +388,25 @@ class OrderService:
 
         full_order = await self.order_repo.get_full(order.id)
 
-        # Admin email notification for status updates
-        admin_emails = await self.user_repo.get_admin_emails()
+        # Send order status email to the customer
         app_settings = await self.settings_repo.get_settings()
-        await send_admin_order_email(
-            admin_emails, full_order,
-            event=f"Order Status: {payload.status.value.replace('_', ' ').title()}",
-            store_name=app_settings.store_name,
-        )
+        customer = await self.user_repo.get_by_id(order.user_id)
+        if customer and customer.email:
+            from app.services.email_service import send_order_status_email
+            await send_order_status_email(
+                customer.email, full_order,
+                event=f"Order Status: {payload.status.value.replace('_', ' ').title()}",
+                store_name=app_settings.store_name,
+            )
+
+        # Also send email to admins when order is delivered
+        if payload.status == OrderStatus.DELIVERED:
+            admin_emails = await self.user_repo.get_admin_emails()
+            if admin_emails:
+                await send_admin_order_email(
+                    admin_emails, full_order,
+                    event="Order Delivered",
+                    store_name=app_settings.store_name,
+                )
 
         return full_order

@@ -16,8 +16,8 @@ class UserRegister(BaseSchema):
 
     full_name: str = Field(..., min_length=2, max_length=120, examples=["John Doe"])
     phone: str = Field(..., pattern=r"^\+?[0-9]{7,15}$", examples=["+919876543210"])
-    email: EmailStr | None = Field(default=None, examples=["john@example.com"])
-    password: str = Field(..., min_length=8, examples=["SecurePass1!"])
+    email: EmailStr = Field(..., examples=["john@example.com"])
+    password: str | None = Field(default=None, min_length=8, examples=["SecurePass1!"])
 
 
 class UserLogin(BaseSchema):

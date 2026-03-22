@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -84,6 +84,27 @@ async def update_category(
     """Admin: partially update a category."""
     return await CategoryService(db).update(category_id, payload)
 
+
+@router.get("/categories/{category_id}/details")
+async def get_category_details(
+    category_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """
+    Return subcategories if present, else products for a category.
+    """
+    from app.services.product_service import CategoryService, ProductService
+
+    category = await CategoryService(db).get_category(category_id)
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    subcategories = await CategoryService(db).list_children(category_id)
+    if subcategories:
+        return {"type": "subcategories", "data": subcategories}
+
+    products = await ProductService(db).list_products_with_category(category_id, None, 0, 100, None)
+    return {"type": "products", "data": products}
 
 # ── Products ──────────────────────────────────────────────────────────────────
 
