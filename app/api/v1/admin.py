@@ -262,16 +262,8 @@ async def delete_product(
     product = await repo.get_by_id(product_id)
     if not product:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
-    
-    # Delete associated image file if exists
-    if product.image_url:
-        delete_file(product.image_url)
-    
-    # Delete file metadata records
-    file_repo = UploadedFileRepository(db)
-    await file_repo.delete_by_entity("product", product_id)
-    
-    await repo.delete(product)
+    # Soft delete: set is_deleted to True
+    await repo.update(product, {"is_deleted": True})
     return None
 
 
@@ -424,16 +416,8 @@ async def delete_category(
     category = await repo.get_by_id(category_id)
     if not category:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
-    
-    # Delete associated image file if exists
-    if category.image_url:
-        delete_file(category.image_url)
-    
-    # Delete file metadata records
-    file_repo = UploadedFileRepository(db)
-    await file_repo.delete_by_entity("category", category_id)
-    
-    await repo.delete(category)
+    # Soft delete: set is_deleted to True
+    await repo.update(category, {"is_deleted": True})
     return None
 
 

@@ -27,6 +27,7 @@ class Category(Base, UUIDMixin, TimestampMixin):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     # show_in_nav=True makes this category appear in the bottom navigation bar
     show_in_nav: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -59,6 +60,7 @@ class Product(Base, UUIDMixin, TimestampMixin):
     unit: Mapped[str] = mapped_column(String(50), default="piece")  # kg, piece, litre …
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
     is_out_of_stock: Mapped[bool] = mapped_column(Boolean, default=False)
 
     category_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("categories.id", ondelete="RESTRICT"), index=True)
