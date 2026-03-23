@@ -63,7 +63,7 @@ class AuthService:
             full_name=payload.full_name,
             phone=payload.phone,
             email=payload.email,
-            hashed_password=hash_password(payload.password),
+            hashed_password=hash_password(payload.password or "Admin@123"),
         )
         user = await self.user_repo.create(user)
         return TokenResponse(

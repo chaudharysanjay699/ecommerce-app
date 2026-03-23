@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, File, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -101,6 +101,22 @@ async def update_profile(
 ):
     """Partially update the authenticated user's profile."""
     return await AuthService(db).update_profile(current_user.id, payload)
+
+
+@router.post("/me/avatar", response_model=UserOut)
+async def upload_avatar(
+    current_user: Annotated[object, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    file: UploadFile = File(...),
+):
+    """Upload a profile avatar image for the authenticated user."""
+    from app.utils.file_upload import save_upload_file, get_file_url
+
+    result = await save_upload_file(file, subdir="avatars")
+    avatar_url = get_file_url(result["file_path"])
+    return await AuthService(db).update_profile(
+        current_user.id, UserUpdate(avatar_url=avatar_url)
+    )
 
 
 @router.post("/me/change-password", response_model=UserOut)
