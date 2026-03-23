@@ -23,7 +23,10 @@ class Category(Base, UUIDMixin, TimestampMixin):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     slug: Mapped[str] = mapped_column(String(120), unique=True, index=True, nullable=False)
     # type is now optional — parent categories may not need a type; sub-categories inherit context
-    type: Mapped[CategoryType | None] = mapped_column(Enum(CategoryType), nullable=True)
+    type: Mapped[CategoryType | None] = mapped_column(
+        Enum(CategoryType, values_callable=lambda e: [x.value for x in e]),
+        nullable=True,
+    )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
