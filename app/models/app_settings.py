@@ -1,7 +1,7 @@
 """Application-wide settings model for configurable parameters."""
 from __future__ import annotations
 
-from sqlalchemy import Boolean, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, Integer, Numeric, String, Text, JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -43,6 +43,12 @@ class AppSettings(Base, UUIDMixin, TimestampMixin):
     )
     delivery_charge_multiple: Mapped[float] = mapped_column(
         Numeric(10, 2), default=15.0, nullable=False,
+    )
+    delivery_charge_tiers: Mapped[list | None] = mapped_column(
+        JSON,
+        nullable=True,
+        default=None,
+        comment="List of delivery charge tiers based on order amount",
     )
 
     # ── Vegetable Order Time Window (hours in UTC) ────────────────────────────

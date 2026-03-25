@@ -4,6 +4,13 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 
+class DeliveryChargeTier(BaseModel):
+    """Delivery charge tier based on order amount."""
+    min_price: float = Field(..., ge=0, description="Minimum order amount")
+    max_price: float | None = Field(None, ge=0, description="Maximum order amount (None for unlimited)")
+    delivery_charge: float = Field(..., ge=0, description="Delivery charge for this tier")
+
+
 class AppSettingsOut(BaseModel):
     """Full application settings response."""
 
@@ -19,8 +26,7 @@ class AppSettingsOut(BaseModel):
     order_limit_message: str = ""
 
     # Delivery Charges
-    delivery_charge_single: float = 10.0
-    delivery_charge_multiple: float = 15.0
+    delivery_charge_tiers: list[DeliveryChargeTier] | None = None
 
     # Vegetable Order Time Window
     veg_order_start_hour: int = 5
@@ -50,8 +56,7 @@ class AppSettingsUpdate(BaseModel):
     order_limit_message: str | None = Field(None, min_length=10, max_length=500)
 
     # Delivery Charges
-    delivery_charge_single: float | None = Field(None, ge=0)
-    delivery_charge_multiple: float | None = Field(None, ge=0)
+    delivery_charge_tiers: list[DeliveryChargeTier] | None = None
 
     # Vegetable Order Time Window
     veg_order_start_hour: int | None = Field(None, ge=0, le=23)
@@ -71,8 +76,7 @@ class AppSettingsPublic(BaseModel):
     store_email: str | None = None
     store_address: str | None = None
 
-    delivery_charge_single: float = 10.0
-    delivery_charge_multiple: float = 15.0
+    delivery_charge_tiers: list[DeliveryChargeTier] | None = None
 
     veg_order_start_hour: int = 5
     veg_order_end_hour: int = 9

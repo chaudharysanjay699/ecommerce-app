@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.dependencies import get_current_admin
 from app.models.order import Order, OrderStatus
+from app.models.product import Product
 from app.models.user import User
 from app.schemas.notification import BannerCreate, BannerOut, BannerUpdate
 from app.schemas.offer import OfferCreate, OfferOut, OfferUpdate
@@ -65,8 +66,16 @@ async def get_dashboard_stats(
         
         # Get total products
         total_products = await ProductRepository(db).count()
+
+        result = await db.execute(
+            select(func.count())
+            .select_from(Product)
+            .where(Product.is_out_of_stock == True)
+        )
+        out_of_stock_products = result.scalar_one()
         
         # Get order statistics
+        total_orders = await OrderRepository(db).count()
         total_orders = await OrderRepository(db).count()
         
         # Get total revenue from delivered orders
@@ -83,10 +92,10 @@ async def get_dashboard_stats(
         )
         pending_orders = result.scalar_one()
         
-        result = await db.execute(
+        out_of_stock_result = await db.execute(
             select(func.count()).select_from(Order).where(Order.status == OrderStatus.DELIVERED)
         )
-        delivered_orders = result.scalar_one()
+        delivered_orders = out_of_stock_result.scalar_one()
         
         result = await db.execute(
             select(func.count()).select_from(Order).where(Order.status == OrderStatus.CANCELLED)
@@ -97,6 +106,7 @@ async def get_dashboard_stats(
             "total_users": total_users,
             "active_users": active_users,
             "total_products": total_products,
+            "out_of_stock_products": out_of_stock_products,
             "total_orders": total_orders,
             "total_revenue": float(total_revenue),
             "pending_orders": pending_orders,

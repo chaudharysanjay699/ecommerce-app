@@ -166,10 +166,22 @@ class OrderService:
             )
 
         # ── Delivery charge ──────────────────────────────────────────────────
-        delivery_charge = (
-            float(settings.delivery_charge_single) if len(cart.items) == 1
-            else float(settings.delivery_charge_multiple)
-        )
+        delivery_charge = 0.0
+        tiers = getattr(settings, "delivery_charge_tiers", None)
+        if tiers and isinstance(tiers, list) and len(tiers) > 0:
+            # Find the first tier where subtotal is within min/max
+            for tier in tiers:
+                min_price = float(tier.get("min_price", 0))
+                max_price = tier.get("max_price")
+                max_price = float(max_price) if max_price is not None else None
+                if subtotal >= min_price and (max_price is None or subtotal <= max_price):
+                    delivery_charge = float(tier.get("delivery_charge", 0))
+                    break
+        else:
+            delivery_charge = (
+                float(settings.delivery_charge_single) if len(cart.items) == 1
+                else float(settings.delivery_charge_multiple)
+            )
         total = round(subtotal + delivery_charge, 2)
 
         # ── Persist order ────────────────────────────────────────────────────
