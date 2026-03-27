@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, File, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -26,12 +26,12 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 # ── Registration & Login ──────────────────────────────────────────────────────
 
-@router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def register(
     payload: UserRegister,
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    """Create a new user account."""
+    """Create a new user account and return JWT tokens."""
     return await AuthService(db).register(payload)
 
 
@@ -69,10 +69,9 @@ async def send_otp(
     payload: OTPRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    """Send an OTP to the given phone number."""
-    code = await AuthService(db).send_otp(payload.phone)
-    # TODO: remove debug_code before going to production
-    return {"message": "OTP sent", "debug_code": code}
+    """Send an OTP to the given phone number or email."""
+    await AuthService(db).send_otp(payload.identifier)
+    return {"message": "OTP sent successfully"}
 
 
 @router.post("/otp/verify", response_model=TokenResponse)
@@ -102,6 +101,22 @@ async def update_profile(
 ):
     """Partially update the authenticated user's profile."""
     return await AuthService(db).update_profile(current_user.id, payload)
+
+
+@router.post("/me/avatar", response_model=UserOut)
+async def upload_avatar(
+    current_user: Annotated[object, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    file: UploadFile = File(...),
+):
+    """Upload a profile avatar image for the authenticated user."""
+    from app.utils.file_upload import save_upload_file, get_file_url
+
+    result = await save_upload_file(file, subdir="avatars")
+    avatar_url = get_file_url(result["file_path"])
+    return await AuthService(db).update_profile(
+        current_user.id, UserUpdate(avatar_url=avatar_url)
+    )
 
 
 @router.post("/me/change-password", response_model=UserOut)

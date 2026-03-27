@@ -23,10 +23,14 @@ class Category(Base, UUIDMixin, TimestampMixin):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     slug: Mapped[str] = mapped_column(String(120), unique=True, index=True, nullable=False)
     # type is now optional — parent categories may not need a type; sub-categories inherit context
-    type: Mapped[CategoryType | None] = mapped_column(Enum(CategoryType), nullable=True)
+    type: Mapped[CategoryType | None] = mapped_column(
+        Enum(CategoryType, values_callable=lambda e: [x.value for x in e]),
+        nullable=True,
+    )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     # show_in_nav=True makes this category appear in the bottom navigation bar
     show_in_nav: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -59,6 +63,7 @@ class Product(Base, UUIDMixin, TimestampMixin):
     unit: Mapped[str] = mapped_column(String(50), default="piece")  # kg, piece, litre …
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
     is_out_of_stock: Mapped[bool] = mapped_column(Boolean, default=False)
 
     category_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("categories.id", ondelete="RESTRICT"), index=True)

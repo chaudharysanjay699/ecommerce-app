@@ -9,9 +9,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 from app.models.base import TimestampMixin, UUIDMixin
 
-DELIVERY_CHARGE_SINGLE = 10.0
-DELIVERY_CHARGE_MULTIPLE = 15.0
-
 
 class OrderStatus(str, enum.Enum):
     PLACED = "placed"
@@ -64,5 +61,5 @@ class OrderItem(Base, UUIDMixin, TimestampMixin):
     subtotal: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
 
     order: Mapped["Order"] = relationship("Order", back_populates="items")
-    product: Mapped["Product"] = relationship("Product", back_populates="order_items")
+    product: Mapped["Product"] = relationship("Product", back_populates="order_items", lazy="joined")
 

@@ -8,6 +8,7 @@ from app.models.offer import Offer
 from app.models.notification import Notification, Banner, DeviceToken
 from app.models.uploaded_file import UploadedFile
 from app.models.wishlist import WishlistItem
+from app.models.app_settings import AppSettings
 
 __all__ = [
     "User",
@@ -28,4 +29,5 @@ __all__ = [
     "DeviceToken",
     "UploadedFile",
     "WishlistItem",
+    "AppSettings",
 ]
