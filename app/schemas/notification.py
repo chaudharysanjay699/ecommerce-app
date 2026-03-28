@@ -35,6 +35,7 @@ class NotificationOut(TimestampSchema):
     title: str
     body: str
     is_read: bool
+    order_id: UUID | None = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────

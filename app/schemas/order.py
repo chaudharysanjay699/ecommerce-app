@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from app.models.order import OrderStatus
 from app.schemas.base import BaseSchema, TimestampSchema
 from app.schemas.order_tracking import OrderTrackingOut
+from app.schemas.product import make_full_url
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -49,6 +50,22 @@ class OrderStatusUpdate(BaseSchema):
 # Response
 # ─────────────────────────────────────────────────────────────────────────────
 
+class OrderItemProductOut(BaseSchema):
+    """Minimal product info for order items."""
+
+    id: UUID
+    name: str
+    image_url: str | None
+    price: float
+    is_active: bool
+    
+    @field_validator('image_url', mode='before')
+    @classmethod
+    def convert_image_url(cls, v):
+        """Convert relative path to full URL."""
+        return make_full_url(v)
+
+
 class OrderItemOut(TimestampSchema):
     """Single line item within an order response."""
 
@@ -56,6 +73,7 @@ class OrderItemOut(TimestampSchema):
     quantity: int
     unit_price: float
     subtotal: float
+    product: OrderItemProductOut | None = None
 
 
 class OrderUserOut(BaseSchema):

@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.dependencies import get_current_admin
 from app.models.order import Order, OrderStatus
+from app.models.product import Product
 from app.models.user import User
 from app.schemas.notification import BannerCreate, BannerOut, BannerUpdate
 from app.schemas.offer import OfferCreate, OfferOut, OfferUpdate
@@ -20,6 +21,7 @@ from app.schemas.order import AdminOrderCancel, OrderOut, OrderStatusUpdate
 from app.schemas.order_tracking import OrderTrackingOut
 from app.schemas.product import CategoryCreate, CategoryOut, CategoryUpdate, CategoryWithChildrenOut, ProductCreate, ProductDetailOut, ProductOut, ProductUpdate, StockAdjust
 from app.schemas.user import AdminUserUpdate, UserOut
+from app.schemas.app_settings import AppSettingsOut, AppSettingsUpdate
 from app.services.notification_service import BannerService
 from app.services.offer_service import OfferService
 from app.services.order_service import OrderService
@@ -64,8 +66,16 @@ async def get_dashboard_stats(
         
         # Get total products
         total_products = await ProductRepository(db).count()
+
+        result = await db.execute(
+            select(func.count())
+            .select_from(Product)
+            .where(Product.is_out_of_stock == True)
+        )
+        out_of_stock_products = result.scalar_one()
         
         # Get order statistics
+        total_orders = await OrderRepository(db).count()
         total_orders = await OrderRepository(db).count()
         
         # Get total revenue from delivered orders
@@ -82,10 +92,10 @@ async def get_dashboard_stats(
         )
         pending_orders = result.scalar_one()
         
-        result = await db.execute(
+        out_of_stock_result = await db.execute(
             select(func.count()).select_from(Order).where(Order.status == OrderStatus.DELIVERED)
         )
-        delivered_orders = result.scalar_one()
+        delivered_orders = out_of_stock_result.scalar_one()
         
         result = await db.execute(
             select(func.count()).select_from(Order).where(Order.status == OrderStatus.CANCELLED)
@@ -96,6 +106,7 @@ async def get_dashboard_stats(
             "total_users": total_users,
             "active_users": active_users,
             "total_products": total_products,
+            "out_of_stock_products": out_of_stock_products,
             "total_orders": total_orders,
             "total_revenue": float(total_revenue),
             "pending_orders": pending_orders,
@@ -261,16 +272,8 @@ async def delete_product(
     product = await repo.get_by_id(product_id)
     if not product:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
-    
-    # Delete associated image file if exists
-    if product.image_url:
-        delete_file(product.image_url)
-    
-    # Delete file metadata records
-    file_repo = UploadedFileRepository(db)
-    await file_repo.delete_by_entity("product", product_id)
-    
-    await repo.delete(product)
+    # Soft delete: set is_deleted to True
+    await repo.update(product, {"is_deleted": True})
     return None
 
 
@@ -423,16 +426,8 @@ async def delete_category(
     category = await repo.get_by_id(category_id)
     if not category:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
-    
-    # Delete associated image file if exists
-    if category.image_url:
-        delete_file(category.image_url)
-    
-    # Delete file metadata records
-    file_repo = UploadedFileRepository(db)
-    await file_repo.delete_by_entity("category", category_id)
-    
-    await repo.delete(category)
+    # Soft delete: set is_deleted to True
+    await repo.update(category, {"is_deleted": True})
     return None
 
 
@@ -669,3 +664,61 @@ async def upload_banner_image(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
+
+
+# ── App Settings ──────────────────────────────────────────────────────────────
+
+@router.get("/settings", response_model=AppSettingsOut)
+async def get_app_settings(
+    _: Admin,
+    db: DB,
+):
+    """Get all application settings."""
+    from app.repositories.app_settings_repository import AppSettingsRepository
+    return await AppSettingsRepository(db).get_settings()
+
+
+@router.patch("/settings", response_model=AppSettingsOut)
+async def update_app_settings(
+    payload: AppSettingsUpdate,
+    _: Admin,
+    db: DB,
+):
+    """Update application settings."""
+    from app.repositories.app_settings_repository import AppSettingsRepository
+    
+    update_data = payload.model_dump(exclude_unset=True)
+    updated = await AppSettingsRepository(db).update_settings(update_data)
+    await db.commit()
+    return updated
+
+
+@router.get("/settings/today-orders-count")
+async def get_today_orders_count(
+    _: Admin,
+    db: DB,
+):
+    """Get the count of orders placed today (for monitoring order limits)."""
+    from datetime import datetime, timezone
+    
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    result = await db.execute(
+        select(func.count())
+        .select_from(Order)
+        .where(Order.created_at >= today_start)
+    )
+    today_count = result.scalar_one()
+    
+    from app.repositories.app_settings_repository import AppSettingsRepository
+    s = await AppSettingsRepository(db).get_settings()
+    
+    return {
+        "today_orders_count": today_count,
+        "daily_order_limit": s.daily_order_limit,
+        "order_limit_enabled": s.order_limit_enabled,
+        "limit_reached": (
+            s.order_limit_enabled 
+            and s.daily_order_limit is not None 
+            and today_count >= s.daily_order_limit
+        ),
+    }
