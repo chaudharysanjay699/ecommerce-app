@@ -17,8 +17,8 @@ env/
 venv/
 
 # Alembic
-alembic/versions/*.py
-!alembic/versions/.gitkeep
+# alembic/versions/*.py
+# !alembic/versions/.gitkeep
 
 # Uploads
 # uploads/
