@@ -40,9 +40,8 @@ services:
       - "${API_PORT:-8000}:8000"
     env_file:
       - .env
-    environment:
-      # Override DATABASE_URL so the app reaches the 'db' container by name
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-ecom_db}
+    # environment:
+    #   DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-ecom_db}
     depends_on:
       db:
         condition: service_healthy
