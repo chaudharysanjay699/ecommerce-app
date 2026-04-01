@@ -21,6 +21,7 @@ class Category(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "categories"
 
     name: Mapped[str] = mapped_column(String(100), nullable=False)
+    name_hi: Mapped[str | None] = mapped_column(String(100), nullable=True)
     slug: Mapped[str] = mapped_column(String(120), unique=True, index=True, nullable=False)
     # type is now optional — parent categories may not need a type; sub-categories inherit context
     type: Mapped[CategoryType | None] = mapped_column(
@@ -28,6 +29,7 @@ class Category(Base, UUIDMixin, TimestampMixin):
         nullable=True,
     )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description_hi: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -56,7 +58,9 @@ class Product(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "products"
 
     name: Mapped[str] = mapped_column(String(200), nullable=False)
+    name_hi: Mapped[str | None] = mapped_column(String(200), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description_hi: Mapped[str | None] = mapped_column(Text, nullable=True)
     price: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     mrp: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
     stock: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

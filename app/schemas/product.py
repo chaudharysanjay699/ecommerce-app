@@ -25,6 +25,13 @@ def make_full_url(image_url: str | None) -> str | None:
     return f"{settings.SERVER_URL}/{normalized}"
 
 
+def _empty_to_none(v: str | None) -> str | None:
+    """Convert empty/whitespace-only strings to None."""
+    if isinstance(v, str) and not v.strip():
+        return None
+    return v
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Category
 # ─────────────────────────────────────────────────────────────────────────────
@@ -33,22 +40,28 @@ class CategoryCreate(BaseSchema):
     """Admin: create a new product category."""
 
     name: str = Field(..., min_length=2, max_length=100)
+    name_hi: str | None = Field(default=None, max_length=100)
     slug: str = Field(..., min_length=2, max_length=120, pattern=r"^[a-z0-9-]+$")
     # type is optional — parent categories may have no type; assign types to sub-categories
     type: CategoryType | None = None
     description: str | None = None
+    description_hi: str | None = None
     image_url: str | None = None
     parent_id: UUID | None = None
     sort_order: int = Field(default=0, ge=0)
     show_in_nav: bool = False
     show_on_top: bool = False
 
+    _normalize_hi = field_validator('name_hi', 'description_hi', mode='before')(lambda v: _empty_to_none(v))
+
 
 class CategoryUpdate(BaseSchema):
     """Admin: partial update of a category (all fields optional)."""
 
     name: str | None = Field(default=None, min_length=2, max_length=100)
+    name_hi: str | None = Field(default=None, max_length=100)
     description: str | None = None
+    description_hi: str | None = None
     image_url: str | None = None
     is_active: bool | None = None
     type: CategoryType | None = None
@@ -62,9 +75,11 @@ class CategoryOut(TimestampSchema):
     """Category response (flat, no nested children)."""
 
     name: str
+    name_hi: str | None
     slug: str
     type: CategoryType | None
     description: str | None
+    description_hi: str | None
     image_url: str | None
     is_active: bool
     sort_order: int
@@ -93,13 +108,17 @@ class ProductCreate(BaseSchema):
     """Admin: create a new product."""
 
     name: str = Field(..., min_length=2, max_length=200)
+    name_hi: str | None = Field(default=None, max_length=200)
     description: str | None = None
+    description_hi: str | None = None
     price: float = Field(..., gt=0)
     mrp: float | None = Field(default=None, gt=0)
     stock: int = Field(default=0, ge=0)
     unit: str = Field(default="piece", max_length=50)  # kg | piece | litre …
     image_url: str | None = None
     category_id: UUID
+
+    _normalize_hi = field_validator('name_hi', 'description_hi', mode='before')(lambda v: _empty_to_none(v))
 
     @model_validator(mode='after')
     def validate_mrp(self) -> 'ProductCreate':
@@ -113,7 +132,9 @@ class ProductUpdate(BaseSchema):
     """Admin: partial update of a product (all fields optional)."""
 
     name: str | None = Field(default=None, min_length=2, max_length=200)
+    name_hi: str | None = Field(default=None, max_length=200)
     description: str | None = None
+    description_hi: str | None = None
     price: float | None = Field(default=None, gt=0)
     mrp: float | None = Field(default=None, gt=0)
     stock: int | None = Field(default=None, ge=0)
@@ -140,7 +161,9 @@ class ProductOut(TimestampSchema):
     """Product response — flat (category_id only)."""
 
     name: str
+    name_hi: str | None
     description: str | None
+    description_hi: str | None
     price: float
     mrp: float | None
     stock: int
