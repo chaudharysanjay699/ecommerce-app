@@ -142,6 +142,8 @@ class ProductUpdate(BaseSchema):
     image_url: str | None = None
     category_id: UUID | None = None
     is_active: bool | None = None
+    hsn_code: str | None = Field(default=None, max_length=20)
+    gst_rate: float | None = Field(default=None, ge=0, le=100)
 
     @model_validator(mode='after')
     def validate_mrp(self) -> 'ProductUpdate':
@@ -171,6 +173,8 @@ class ProductOut(TimestampSchema):
     image_url: str | None
     is_active: bool
     is_out_of_stock: bool
+    hsn_code: str | None = None
+    gst_rate: float | None = None
     category_id: UUID
     
     @field_validator('image_url', mode='before')

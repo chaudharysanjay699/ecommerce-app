@@ -23,6 +23,20 @@ class AppSettings(Base, UUIDMixin, TimestampMixin):
     store_email: Mapped[str | None] = mapped_column(String(200), nullable=True)
     store_address: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # ── GST / Tax Information ─────────────────────────────────────────────────
+    store_gstin: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    store_pan: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    store_state: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    store_state_code: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    default_tax_rate: Mapped[float] = mapped_column(
+        Numeric(5, 2), default=0, nullable=False,
+        comment="Default GST rate (%). Set 0 to disable tax.",
+    )
+    invoice_prefix: Mapped[str] = mapped_column(
+        String(20), default="INV", nullable=False,
+    )
+    invoice_terms: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # ── Order Management ──────────────────────────────────────────────────────
     daily_order_limit: Mapped[int | None] = mapped_column(
         Integer, nullable=True,

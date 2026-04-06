@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
@@ -220,6 +222,69 @@ async def get_order_tracking(
 ):
     """Return the complete tracking timeline for any order."""
     return await TrackingService(db).list_for_order(order_id)
+
+
+@router.get("/orders/{order_id}/invoice")
+async def get_admin_order_invoice(
+    order_id: UUID,
+    _: Admin,
+    db: DB,
+):
+    """Admin: return the invoice PDF for any order."""
+    order = await OrderService(db).admin_get_order(order_id)
+    if not order.invoice_url:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not generated yet")
+    filepath = Path(settings.UPLOAD_DIR) / "pdfs" / f"invoice_{order.id}.pdf"
+    if not filepath.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice file not found")
+    return FileResponse(
+        path=str(filepath),
+        media_type="application/pdf",
+        filename=f"invoice_{str(order.id)[:8]}.pdf",
+    )
+
+
+@router.get("/orders/{order_id}/shipping-label")
+async def get_admin_order_shipping_label(
+    order_id: UUID,
+    _: Admin,
+    db: DB,
+):
+    """Admin: return the shipping label PDF for any order."""
+    order = await OrderService(db).admin_get_order(order_id)
+    if not order.shipping_label_url:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shipping label not generated yet")
+    filepath = Path(settings.UPLOAD_DIR) / "pdfs" / f"shipping_label_{order.id}.pdf"
+    if not filepath.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shipping label file not found")
+    return FileResponse(
+        path=str(filepath),
+        media_type="application/pdf",
+        filename=f"shipping_label_{str(order.id)[:8]}.pdf",
+    )
+
+
+@router.post("/orders/{order_id}/regenerate-pdfs", response_model=OrderOut)
+async def regenerate_order_pdfs(
+    order_id: UUID,
+    _: Admin,
+    db: DB,
+):
+    """Admin: regenerate invoice & shipping label PDFs for an order."""
+    from app.repositories.app_settings_repository import AppSettingsRepository
+    from app.services.pdf_service import generate_invoice_pdf, generate_shipping_label_pdf
+    from app.repositories.order_repository import OrderRepository
+
+    order = await OrderService(db).admin_get_order(order_id)
+    app_settings = await AppSettingsRepository(db).get_settings()
+
+    invoice_url = await generate_invoice_pdf(order, store_name=app_settings.store_name, app_settings=app_settings)
+    label_url = await generate_shipping_label_pdf(order, store_name=app_settings.store_name)
+
+    order_repo = OrderRepository(db)
+    await order_repo.update(order, {"invoice_url": invoice_url, "shipping_label_url": label_url})
+
+    return await OrderService(db).admin_get_order(order_id)
 
 
 # ── Products ──────────────────────────────────────────────────────────────────

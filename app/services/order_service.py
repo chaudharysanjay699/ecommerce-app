@@ -148,19 +148,31 @@ class OrderService:
             unit_price = float(product.price)
 
             # Apply active offer if available and within usage cap
+            item_discount = 0.0
             offer = await self.offer_repo.get_active_for_product(product.id)
             if offer and (offer.max_uses is None or offer.used_count < offer.max_uses):
-                discount = unit_price * (float(offer.discount_percent) / 100)
-                unit_price = round(unit_price - discount, 2)
+                item_discount = round(unit_price * (float(offer.discount_percent) / 100), 2)
+                unit_price = round(unit_price - item_discount, 2)
                 await self.offer_repo.update(offer, {"used_count": offer.used_count + 1})
 
-            item_subtotal = round(unit_price * cart_item.quantity, 2)
+            # GST per line item
+            gst_rate = float(getattr(product, "gst_rate", 0) or 0)
+            if gst_rate == 0:
+                gst_rate = float(getattr(settings, "default_tax_rate", 0) or 0)
+            item_taxable = round(unit_price * cart_item.quantity, 2)
+            tax_amount = round(item_taxable * gst_rate / 100, 2) if gst_rate else 0.0
+            item_subtotal = round(item_taxable + tax_amount, 2)
+
             subtotal = round(subtotal + item_subtotal, 2)
             order_items.append(
                 OrderItem(
                     product_id=product.id,
                     quantity=cart_item.quantity,
                     unit_price=unit_price,
+                    discount=item_discount,
+                    tax_rate=gst_rate,
+                    tax_amount=tax_amount,
+                    hsn_code=getattr(product, "hsn_code", None),
                     subtotal=item_subtotal,
                 )
             )
@@ -184,6 +196,10 @@ class OrderService:
             )
         total = round(subtotal + delivery_charge, 2)
 
+        # ── Generate invoice number ────────────────────────────────────────
+        invoice_prefix = getattr(settings, "invoice_prefix", "INV") or "INV"
+        invoice_number = await self.order_repo.generate_invoice_number(invoice_prefix)
+
         # ── Persist order ────────────────────────────────────────────────────
         order = Order(
             user_id=user_id,
@@ -192,6 +208,7 @@ class OrderService:
             total=total,
             delivery_address=delivery_address,
             notes=payload.notes,
+            invoice_number=invoice_number,
         )
         order.items = order_items
         await self.order_repo.create(order)
@@ -235,6 +252,19 @@ class OrderService:
         await send_push(admin_tokens, "New Order Received 🛎️", f"New order received: Order #{order.id}")
 
         full_order = await self.order_repo.get_full(order.id)
+
+        # ── Generate invoice & shipping label PDFs ───────────────────────────
+        try:
+            from app.services.pdf_service import generate_invoice_pdf, generate_shipping_label_pdf
+
+            invoice_url = await generate_invoice_pdf(full_order, store_name=settings.store_name, app_settings=settings)
+            label_url = await generate_shipping_label_pdf(full_order, store_name=settings.store_name)
+            await self.order_repo.update(
+                order, {"invoice_url": invoice_url, "shipping_label_url": label_url}
+            )
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("Failed to generate PDFs for order %s", order.id)
 
         # ── Send invoice email to customer ───────────────────────────────────
         user = await self.user_repo.get_by_id(user_id)

@@ -20,6 +20,15 @@ class AppSettingsOut(BaseModel):
     store_email: str | None = None
     store_address: str | None = None
 
+    # GST / Tax Information
+    store_gstin: str | None = None
+    store_pan: str | None = None
+    store_state: str | None = None
+    store_state_code: str | None = None
+    default_tax_rate: float = 0
+    invoice_prefix: str = "INV"
+    invoice_terms: str | None = None
+
     # Order Management
     daily_order_limit: int | None = None
     order_limit_enabled: bool = False
@@ -49,6 +58,15 @@ class AppSettingsUpdate(BaseModel):
     store_phone: str | None = Field(None, max_length=20)
     store_email: str | None = Field(None, max_length=200)
     store_address: str | None = None
+
+    # GST / Tax Information
+    store_gstin: str | None = Field(None, max_length=20)
+    store_pan: str | None = Field(None, max_length=20)
+    store_state: str | None = Field(None, max_length=100)
+    store_state_code: str | None = Field(None, max_length=5)
+    default_tax_rate: float | None = Field(None, ge=0, le=100)
+    invoice_prefix: str | None = Field(None, min_length=1, max_length=20)
+    invoice_terms: str | None = None
 
     # Order Management
     daily_order_limit: int | None = Field(None, ge=0)

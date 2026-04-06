@@ -69,6 +69,8 @@ class Product(Base, UUIDMixin, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
     is_out_of_stock: Mapped[bool] = mapped_column(Boolean, default=False)
+    hsn_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    gst_rate: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
 
     category_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("categories.id", ondelete="RESTRICT"), index=True)
 

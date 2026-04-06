@@ -72,6 +72,10 @@ class OrderItemOut(TimestampSchema):
     product_id: UUID
     quantity: int
     unit_price: float
+    discount: float = 0
+    tax_rate: float = 0
+    tax_amount: float = 0
+    hsn_code: str | None = None
     subtotal: float
     product: OrderItemProductOut | None = None
 
@@ -99,6 +103,9 @@ class OrderOut(TimestampSchema):
     delivery_address: str
     notes: str | None
     cancel_reason: str | None
+    invoice_number: str | None = None
+    invoice_url: str | None = None
+    shipping_label_url: str | None = None
     items: list[OrderItemOut] = []
     tracking: list[OrderTrackingOut] = []
 
