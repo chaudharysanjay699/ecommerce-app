@@ -29,6 +29,12 @@ class OrderCreate(BaseSchema):
 # Update (admin)
 # ─────────────────────────────────────────────────────────────────────────────
 
+class OrderCancel(BaseSchema):
+    """Customer: cancel own order with a reason."""
+
+    reason: str = Field(..., min_length=3, max_length=300)
+
+
 class AdminOrderCancel(BaseSchema):
     """Admin: cancel an order and record the reason."""
 

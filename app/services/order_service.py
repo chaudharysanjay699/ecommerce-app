@@ -296,6 +296,81 @@ class OrderService:
         """Return paginated orders for the authenticated user."""
         return await self.order_repo.list_by_user(user_id, skip, limit)
 
+    async def cancel_order(self, order_id: UUID, user_id: UUID, reason: str) -> Order:
+        """Customer: cancel own order (allowed before out_for_delivery)."""
+        order = await self.order_repo.get_full(order_id)
+        if not order:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
+            )
+        if order.user_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
+            )
+
+        cancellable = (
+            OrderStatus.PLACED,
+            OrderStatus.CONFIRMED,
+            OrderStatus.PACKED,
+        )
+        if order.status not in cancellable:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Order cannot be cancelled once it is '{order.status.value}'",
+            )
+
+        # Restore stock
+        for order_item in order.items:
+            product = await self.product_repo.get_by_id(order_item.product_id)
+            if product:
+                restored_stock = product.stock + order_item.quantity
+                await self.product_repo.update(
+                    product,
+                    {"stock": restored_stock, "is_out_of_stock": restored_stock <= 0},
+                )
+
+        await self.order_repo.update(
+            order, {"status": OrderStatus.CANCELLED, "cancel_reason": reason}
+        )
+
+        tracking = OrderTracking(
+            order_id=order.id,
+            status=OrderStatus.CANCELLED,
+            description=f"Cancelled by customer: {reason}",
+            changed_by="customer",
+        )
+        self.order_repo.db.add(tracking)
+
+        notif = Notification(
+            user_id=user_id,
+            title="Order Cancelled",
+            body=f"Your order #{order.id} has been cancelled.",
+            order_id=order.id,
+        )
+        self.notif_repo.db.add(notif)
+        await self.order_repo.db.flush()
+
+        # FCM push
+        tokens = await self.device_repo.get_tokens_for_user(user_id)
+        await send_push(tokens, "Order Cancelled", f"Your order #{order.id} has been cancelled.")
+
+        # Notify admins
+        full_order = await self.order_repo.get_full(order.id)
+        admin_emails = await self.user_repo.get_admin_emails()
+        app_settings = await self.settings_repo.get_settings()
+        await send_admin_order_email(
+            admin_emails, full_order, event="Order Cancelled by Customer",
+            store_name=app_settings.store_name,
+        )
+
+        admin_tokens = await self.device_repo.get_all_admin_tokens()
+        await send_push(
+            admin_tokens, "Order Cancelled by Customer",
+            f"Order #{order.id} was cancelled by the customer. Reason: {reason}",
+        )
+
+        return full_order
+
     # ── Admin operations ──────────────────────────────────────────────────────
 
     async def admin_get_order(self, order_id: UUID) -> Order:

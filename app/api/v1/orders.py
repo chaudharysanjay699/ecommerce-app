@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
-from app.schemas.order import OrderCreate, OrderOut
+from app.schemas.order import OrderCancel, OrderCreate, OrderOut
 from app.services.order_service import OrderService
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
@@ -46,6 +46,17 @@ async def get_order(
 ):
     """Return a single order (with items and tracking history)."""
     return await OrderService(db).get_order(order_id, current_user.id)
+
+
+@router.patch("/{order_id}/cancel", response_model=OrderOut)
+async def cancel_order(
+    order_id: UUID,
+    payload: OrderCancel,
+    current_user: Annotated[object, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Cancel an order (allowed before out-for-delivery)."""
+    return await OrderService(db).cancel_order(order_id, current_user.id, payload.reason)
 
 
 @router.get("/{order_id}/invoice")
