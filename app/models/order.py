@@ -36,6 +36,9 @@ class Order(Base, UUIDMixin, TimestampMixin):
     delivery_address: Mapped[str] = mapped_column(Text, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     cancel_reason: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    invoice_number: Mapped[str | None] = mapped_column(String(50), unique=True, index=True, nullable=True)
+    invoice_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    shipping_label_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     user: Mapped["User"] = relationship("User", back_populates="orders")
     items: Mapped[list["OrderItem"]] = relationship(
@@ -58,6 +61,10 @@ class OrderItem(Base, UUIDMixin, TimestampMixin):
     )
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     unit_price: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    discount: Mapped[float] = mapped_column(Numeric(10, 2), default=0, nullable=False)
+    tax_rate: Mapped[float] = mapped_column(Numeric(5, 2), default=0, nullable=False)
+    tax_amount: Mapped[float] = mapped_column(Numeric(10, 2), default=0, nullable=False)
+    hsn_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
     subtotal: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
 
     order: Mapped["Order"] = relationship("Order", back_populates="items")

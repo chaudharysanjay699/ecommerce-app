@@ -148,19 +148,31 @@ class OrderService:
             unit_price = float(product.price)
 
             # Apply active offer if available and within usage cap
+            item_discount = 0.0
             offer = await self.offer_repo.get_active_for_product(product.id)
             if offer and (offer.max_uses is None or offer.used_count < offer.max_uses):
-                discount = unit_price * (float(offer.discount_percent) / 100)
-                unit_price = round(unit_price - discount, 2)
+                item_discount = round(unit_price * (float(offer.discount_percent) / 100), 2)
+                unit_price = round(unit_price - item_discount, 2)
                 await self.offer_repo.update(offer, {"used_count": offer.used_count + 1})
 
-            item_subtotal = round(unit_price * cart_item.quantity, 2)
+            # GST per line item
+            gst_rate = float(getattr(product, "gst_rate", 0) or 0)
+            if gst_rate == 0:
+                gst_rate = float(getattr(settings, "default_tax_rate", 0) or 0)
+            item_taxable = round(unit_price * cart_item.quantity, 2)
+            tax_amount = round(item_taxable * gst_rate / 100, 2) if gst_rate else 0.0
+            item_subtotal = round(item_taxable + tax_amount, 2)
+
             subtotal = round(subtotal + item_subtotal, 2)
             order_items.append(
                 OrderItem(
                     product_id=product.id,
                     quantity=cart_item.quantity,
                     unit_price=unit_price,
+                    discount=item_discount,
+                    tax_rate=gst_rate,
+                    tax_amount=tax_amount,
+                    hsn_code=getattr(product, "hsn_code", None),
                     subtotal=item_subtotal,
                 )
             )
@@ -184,6 +196,10 @@ class OrderService:
             )
         total = round(subtotal + delivery_charge, 2)
 
+        # ── Generate invoice number ────────────────────────────────────────
+        invoice_prefix = getattr(settings, "invoice_prefix", "INV") or "INV"
+        invoice_number = await self.order_repo.generate_invoice_number(invoice_prefix)
+
         # ── Persist order ────────────────────────────────────────────────────
         order = Order(
             user_id=user_id,
@@ -192,6 +208,7 @@ class OrderService:
             total=total,
             delivery_address=delivery_address,
             notes=payload.notes,
+            invoice_number=invoice_number,
         )
         order.items = order_items
         await self.order_repo.create(order)
@@ -236,6 +253,19 @@ class OrderService:
 
         full_order = await self.order_repo.get_full(order.id)
 
+        # ── Generate invoice & shipping label PDFs ───────────────────────────
+        try:
+            from app.services.pdf_service import generate_invoice_pdf, generate_shipping_label_pdf
+
+            invoice_url = await generate_invoice_pdf(full_order, store_name=settings.store_name, app_settings=settings)
+            label_url = await generate_shipping_label_pdf(full_order, store_name=settings.store_name)
+            await self.order_repo.update(
+                order, {"invoice_url": invoice_url, "shipping_label_url": label_url}
+            )
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("Failed to generate PDFs for order %s", order.id)
+
         # ── Send invoice email to customer ───────────────────────────────────
         user = await self.user_repo.get_by_id(user_id)
         if user and user.email:
@@ -265,6 +295,81 @@ class OrderService:
     async def list_user_orders(self, user_id: UUID, skip: int = 0, limit: int = 20):
         """Return paginated orders for the authenticated user."""
         return await self.order_repo.list_by_user(user_id, skip, limit)
+
+    async def cancel_order(self, order_id: UUID, user_id: UUID, reason: str) -> Order:
+        """Customer: cancel own order (allowed before out_for_delivery)."""
+        order = await self.order_repo.get_full(order_id)
+        if not order:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
+            )
+        if order.user_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
+            )
+
+        cancellable = (
+            OrderStatus.PLACED,
+            OrderStatus.CONFIRMED,
+            OrderStatus.PACKED,
+        )
+        if order.status not in cancellable:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Order cannot be cancelled once it is '{order.status.value}'",
+            )
+
+        # Restore stock
+        for order_item in order.items:
+            product = await self.product_repo.get_by_id(order_item.product_id)
+            if product:
+                restored_stock = product.stock + order_item.quantity
+                await self.product_repo.update(
+                    product,
+                    {"stock": restored_stock, "is_out_of_stock": restored_stock <= 0},
+                )
+
+        await self.order_repo.update(
+            order, {"status": OrderStatus.CANCELLED, "cancel_reason": reason}
+        )
+
+        tracking = OrderTracking(
+            order_id=order.id,
+            status=OrderStatus.CANCELLED,
+            description=f"Cancelled by customer: {reason}",
+            changed_by="customer",
+        )
+        self.order_repo.db.add(tracking)
+
+        notif = Notification(
+            user_id=user_id,
+            title="Order Cancelled",
+            body=f"Your order #{order.id} has been cancelled.",
+            order_id=order.id,
+        )
+        self.notif_repo.db.add(notif)
+        await self.order_repo.db.flush()
+
+        # FCM push
+        tokens = await self.device_repo.get_tokens_for_user(user_id)
+        await send_push(tokens, "Order Cancelled", f"Your order #{order.id} has been cancelled.")
+
+        # Notify admins
+        full_order = await self.order_repo.get_full(order.id)
+        admin_emails = await self.user_repo.get_admin_emails()
+        app_settings = await self.settings_repo.get_settings()
+        await send_admin_order_email(
+            admin_emails, full_order, event="Order Cancelled by Customer",
+            store_name=app_settings.store_name,
+        )
+
+        admin_tokens = await self.device_repo.get_all_admin_tokens()
+        await send_push(
+            admin_tokens, "Order Cancelled by Customer",
+            f"Order #{order.id} was cancelled by the customer. Reason: {reason}",
+        )
+
+        return full_order
 
     # ── Admin operations ──────────────────────────────────────────────────────
 

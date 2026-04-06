@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -15,6 +16,18 @@ class OrderRepository(BaseRepository[Order]):
 
     def __init__(self, db: AsyncSession) -> None:
         super().__init__(Order, db)
+
+    async def generate_invoice_number(self, prefix: str = "INV") -> str:
+        """Generate a sequential invoice number like INV-2026-0001."""
+        year = datetime.now(timezone.utc).year
+        like_pattern = f"{prefix}-{year}-%"
+        result = await self.db.execute(
+            select(func.count())
+            .select_from(Order)
+            .where(Order.invoice_number.like(like_pattern))
+        )
+        seq = result.scalar_one() + 1
+        return f"{prefix}-{year}-{seq:04d}"
 
     # ── Specific queries ──────────────────────────────────────────────────────
 
