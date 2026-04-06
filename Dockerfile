@@ -6,15 +6,20 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
+    pkg-config \
     libpq-dev \
+    libcairo2-dev \
     libjpeg62-turbo-dev \
     libfreetype6-dev \
     zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
 COPY requirements.txt .
 RUN pip install --upgrade pip setuptools wheel \
-    && pip install --no-cache-dir --prefix=/install -r requirements.txt
+    && pip install --no-cache-dir -r requirements.txt
 
 
 # ── Stage 2: runtime image ────────────────────────────────────────────────────
@@ -25,14 +30,16 @@ WORKDIR /app
 # Runtime system libraries only (no build tools)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
+    libcairo2 \
     libjpeg62-turbo \
     libfreetype6 \
     zlib1g \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy installed packages from builder stage
-COPY --from=builder /install /usr/local
+# Copy virtual env from builder stage
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
 # Copy application source
 COPY . .
