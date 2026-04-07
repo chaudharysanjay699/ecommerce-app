@@ -266,6 +266,9 @@ class OrderService:
             import logging
             logging.getLogger(__name__).exception("Failed to generate PDFs for order %s", order.id)
 
+        # Re-fetch after update so eagerly-loaded relationships are fresh
+        full_order = await self.order_repo.get_full(order.id)
+
         # ── Send invoice email to customer ───────────────────────────────────
         user = await self.user_repo.get_by_id(user_id)
         if user and user.email:
