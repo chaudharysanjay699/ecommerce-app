@@ -44,12 +44,13 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Copy application source
 COPY . .
 
-# Writable directory for file uploads
-RUN mkdir -p uploads
-
 # Non-root user for security
-RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser \
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
+
+# Writable directories for file uploads
+RUN mkdir -p uploads/pdfs uploads/products uploads/categories uploads/banners uploads/avatars \
     && chown -R appuser:appgroup /app
+
 USER appuser
 
 EXPOSE 80
