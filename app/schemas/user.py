@@ -71,6 +71,27 @@ class PasswordChange(BaseSchema):
         return self
 
 
+class ForgotPasswordRequest(BaseSchema):
+    """Request a password reset link via email."""
+
+    email: EmailStr = Field(..., examples=["admin@example.com"])
+    base_url: str = Field(..., examples=["https://admin.example.com"])
+
+
+class ResetPasswordRequest(BaseSchema):
+    """Reset password using a token from the reset link."""
+
+    token: str = Field(..., min_length=10)
+    new_password: str = Field(..., min_length=8)
+    confirm_password: str = Field(..., min_length=8)
+
+    @model_validator(mode="after")
+    def passwords_match(self) -> "ResetPasswordRequest":
+        if self.new_password != self.confirm_password:
+            raise ValueError("new_password and confirm_password do not match")
+        return self
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Update
 # ─────────────────────────────────────────────────────────────────────────────

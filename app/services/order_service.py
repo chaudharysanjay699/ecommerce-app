@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -25,7 +27,9 @@ from app.repositories.order_repository import OrderRepository
 from app.repositories.product_repository import ProductRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.order import AdminOrderCancel, OrderCreate, OrderStatusUpdate
-from app.services.email_service import send_admin_order_email, send_invoice_email
+from app.services.email_service import send_admin_order_email, send_invoice_email, send_low_stock_alert_email
+
+logger = logging.getLogger(__name__)
 
 
 class OrderService:
@@ -214,6 +218,10 @@ class OrderService:
         await self.order_repo.create(order)
 
         # ── Deduct stock ─────────────────────────────────────────────────────
+        low_stock_items = []
+        low_stock_threshold = getattr(settings, "low_stock_threshold", 5)
+        low_stock_alert_enabled = getattr(settings, "low_stock_alert_enabled", True)
+
         for cart_item in cart.items:
             product = await self.product_repo.get_by_id(cart_item.product_id)
             new_stock = product.stock - cart_item.quantity
@@ -221,6 +229,11 @@ class OrderService:
                 product,
                 {"stock": new_stock, "is_out_of_stock": new_stock <= 0},
             )
+            if low_stock_alert_enabled and new_stock <= low_stock_threshold:
+                low_stock_items.append({
+                    "name": product.name,
+                    "stock": max(new_stock, 0),
+                })
 
         # ── Clear cart (bulk DELETE) ─────────────────────────────────────────
         await self.cart_repo.clear_items(cart.id)
@@ -244,39 +257,58 @@ class OrderService:
         self.notif_repo.db.add(notif)
 
         await self.order_repo.db.flush()
-        # ── FCM push: user confirmation + admin alert ──────────────────────
+
+        # ── Gather data needed for background tasks (while DB session is alive) ──
         user_tokens = await self.device_repo.get_tokens_for_user(user_id)
-        await send_push(user_tokens, "Order Placed ✅", f"Your order #{order.id} was placed. Total: ₹{total}")
-
         admin_tokens = await self.device_repo.get_all_admin_tokens()
-        await send_push(admin_tokens, "New Order Received 🛎️", f"New order received: Order #{order.id}")
-
-        full_order = await self.order_repo.get_full(order.id)
-
-        # ── Generate invoice & shipping label PDFs ───────────────────────────
-        try:
-            from app.services.pdf_service import generate_invoice_pdf, generate_shipping_label_pdf
-
-            invoice_url = await generate_invoice_pdf(full_order, store_name=settings.store_name, app_settings=settings)
-            label_url = await generate_shipping_label_pdf(full_order, store_name=settings.store_name)
-            await self.order_repo.update(
-                order, {"invoice_url": invoice_url, "shipping_label_url": label_url}
-            )
-        except Exception:
-            import logging
-            logging.getLogger(__name__).exception("Failed to generate PDFs for order %s", order.id)
-
-        # Re-fetch after update so eagerly-loaded relationships are fresh
-        full_order = await self.order_repo.get_full(order.id)
-
-        # ── Send invoice email to customer ───────────────────────────────────
         user = await self.user_repo.get_by_id(user_id)
-        if user and user.email:
-            await send_invoice_email(user.email, full_order, store_name=settings.store_name)
-
-        # ── Send admin email notification ────────────────────────────────────
+        user_email = user.email if user else None
         admin_emails = await self.user_repo.get_admin_emails()
-        await send_admin_order_email(admin_emails, full_order, event="New Order Placed", store_name=settings.store_name)
+        full_order = await self.order_repo.get_full(order.id)
+        store_name = settings.store_name
+        order_id = order.id
+
+        # ── Fire background tasks (FCM, PDFs, emails) ───────────────────────
+        async def _post_order_tasks():
+            try:
+                # FCM push: user confirmation + admin alert
+                await send_push(user_tokens, "Order Placed ✅", f"Your order #{order_id} was placed. Total: ₹{total}")
+                await send_push(admin_tokens, "New Order Received 🛎️", f"New order received: Order #{order_id}")
+
+                # Generate invoice & shipping label PDFs
+                try:
+                    from app.services.pdf_service import generate_invoice_pdf, generate_shipping_label_pdf
+                    from app.core.database import AsyncSessionLocal
+
+                    invoice_url = await generate_invoice_pdf(full_order, store_name=store_name, app_settings=settings)
+                    label_url = await generate_shipping_label_pdf(full_order, store_name=store_name)
+                    # Update order with PDF URLs in a fresh DB session
+                    async with AsyncSessionLocal() as bg_db:
+                        from sqlalchemy import update as sa_update
+                        from app.models.order import Order as OrderModel
+                        await bg_db.execute(
+                            sa_update(OrderModel)
+                            .where(OrderModel.id == order_id)
+                            .values(invoice_url=invoice_url, shipping_label_url=label_url)
+                        )
+                        await bg_db.commit()
+                except Exception:
+                    logger.exception("Failed to generate PDFs for order %s", order_id)
+
+                # Send invoice email to customer
+                if user_email:
+                    await send_invoice_email(user_email, full_order, store_name=store_name)
+
+                # Send admin email notification
+                await send_admin_order_email(admin_emails, full_order, event="New Order Placed", store_name=store_name)
+
+                # Send low stock alert email to admins
+                if low_stock_items:
+                    await send_low_stock_alert_email(admin_emails, low_stock_items, store_name=store_name)
+            except Exception:
+                logger.exception("Background post-order tasks failed for order %s", order_id)
+
+        asyncio.create_task(_post_order_tasks())
 
         return full_order
 
@@ -353,24 +385,29 @@ class OrderService:
         self.notif_repo.db.add(notif)
         await self.order_repo.db.flush()
 
-        # FCM push
+        # Gather data for background tasks
         tokens = await self.device_repo.get_tokens_for_user(user_id)
-        await send_push(tokens, "Order Cancelled", f"Your order #{order.id} has been cancelled.")
-
-        # Notify admins
         full_order = await self.order_repo.get_full(order.id)
         admin_emails = await self.user_repo.get_admin_emails()
         app_settings = await self.settings_repo.get_settings()
-        await send_admin_order_email(
-            admin_emails, full_order, event="Order Cancelled by Customer",
-            store_name=app_settings.store_name,
-        )
-
         admin_tokens = await self.device_repo.get_all_admin_tokens()
-        await send_push(
-            admin_tokens, "Order Cancelled by Customer",
-            f"Order #{order.id} was cancelled by the customer. Reason: {reason}",
-        )
+        _order_id = order.id
+
+        async def _post_cancel_tasks():
+            try:
+                await send_push(tokens, "Order Cancelled", f"Your order #{_order_id} has been cancelled.")
+                await send_admin_order_email(
+                    admin_emails, full_order, event="Order Cancelled by Customer",
+                    store_name=app_settings.store_name,
+                )
+                await send_push(
+                    admin_tokens, "Order Cancelled by Customer",
+                    f"Order #{_order_id} was cancelled by the customer. Reason: {reason}",
+                )
+            except Exception:
+                logger.exception("Background cancel tasks failed for order %s", _order_id)
+
+        asyncio.create_task(_post_cancel_tasks())
 
         return full_order
 
@@ -433,16 +470,22 @@ class OrderService:
         self.notif_repo.db.add(notif)
         await self.order_repo.db.flush()
 
-        # FCM push to customer
+        # Gather data for background tasks
         tokens = await self.device_repo.get_tokens_for_user(order.user_id)
-        await send_push(tokens, "Order Cancelled ❌", f"Your order #{order.id} was cancelled. Reason: {payload.reason}")
-
         full_order = await self.order_repo.get_full(order.id)
-
-        # Admin email notification
         admin_emails = await self.user_repo.get_admin_emails()
         app_settings = await self.settings_repo.get_settings()
-        await send_admin_order_email(admin_emails, full_order, event="Order Cancelled", store_name=app_settings.store_name)
+        _order_id = order.id
+        _reason = payload.reason
+
+        async def _post_admin_cancel_tasks():
+            try:
+                await send_push(tokens, "Order Cancelled ❌", f"Your order #{_order_id} was cancelled. Reason: {_reason}")
+                await send_admin_order_email(admin_emails, full_order, event="Order Cancelled", store_name=app_settings.store_name)
+            except Exception:
+                logger.exception("Background admin-cancel tasks failed for order %s", _order_id)
+
+        asyncio.create_task(_post_admin_cancel_tasks())
 
         return full_order
 
@@ -491,7 +534,7 @@ class OrderService:
         self.notif_repo.db.add(notif)
         await self.order_repo.db.flush()
 
-        # FCM push with status-specific message
+        # Gather data for background tasks
         status_messages = {
             OrderStatus.CONFIRMED:        ("Order Confirmed ✅",        f"Your order #{order.id} has been confirmed!"),
             OrderStatus.PACKED:           ("Order Packed 📦",           f"Your order #{order.id} is packed and ready."),
@@ -504,29 +547,35 @@ class OrderService:
             ("Order Update", f"Your order #{order.id} is now: {payload.status.value}.")
         )
         tokens = await self.device_repo.get_tokens_for_user(order.user_id)
-        await send_push(tokens, title, body)
-
         full_order = await self.order_repo.get_full(order.id)
-
-        # Send order status email to the customer
         app_settings = await self.settings_repo.get_settings()
         customer = await self.user_repo.get_by_id(order.user_id)
-        if customer and customer.email:
-            from app.services.email_service import send_order_status_email
-            await send_order_status_email(
-                customer.email, full_order,
-                event=f"Order Status: {payload.status.value.replace('_', ' ').title()}",
-                store_name=app_settings.store_name,
-            )
+        customer_email = customer.email if customer else None
+        admin_emails = await self.user_repo.get_admin_emails() if payload.status == OrderStatus.DELIVERED else []
+        _order_id = order.id
+        _status = payload.status
 
-        # Also send email to admins when order is delivered
-        if payload.status == OrderStatus.DELIVERED:
-            admin_emails = await self.user_repo.get_admin_emails()
-            if admin_emails:
-                await send_admin_order_email(
-                    admin_emails, full_order,
-                    event="Order Delivered",
-                    store_name=app_settings.store_name,
-                )
+        async def _post_status_update_tasks():
+            try:
+                await send_push(tokens, title, body)
+
+                if customer_email:
+                    from app.services.email_service import send_order_status_email
+                    await send_order_status_email(
+                        customer_email, full_order,
+                        event=f"Order Status: {_status.value.replace('_', ' ').title()}",
+                        store_name=app_settings.store_name,
+                    )
+
+                if _status == OrderStatus.DELIVERED and admin_emails:
+                    await send_admin_order_email(
+                        admin_emails, full_order,
+                        event="Order Delivered",
+                        store_name=app_settings.store_name,
+                    )
+            except Exception:
+                logger.exception("Background status-update tasks failed for order %s", _order_id)
+
+        asyncio.create_task(_post_status_update_tasks())
 
         return full_order

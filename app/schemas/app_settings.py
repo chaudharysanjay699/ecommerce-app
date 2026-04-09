@@ -42,6 +42,10 @@ class AppSettingsOut(BaseModel):
     veg_order_end_hour: int = 9
     veg_order_enabled: bool = True
 
+    # Low Stock Alert
+    low_stock_threshold: int = 5
+    low_stock_alert_enabled: bool = True
+
     # Maintenance Mode
     maintenance_mode: bool = False
     maintenance_message: str = ""
@@ -80,6 +84,10 @@ class AppSettingsUpdate(BaseModel):
     veg_order_start_hour: int | None = Field(None, ge=0, le=23)
     veg_order_end_hour: int | None = Field(None, ge=0, le=23)
     veg_order_enabled: bool | None = None
+
+    # Low Stock Alert
+    low_stock_threshold: int | None = Field(None, ge=0)
+    low_stock_alert_enabled: bool | None = None
 
     # Maintenance Mode
     maintenance_mode: bool | None = None
