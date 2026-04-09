@@ -416,3 +416,147 @@ async def send_order_status_email(
         recipients=[email],
         html_body=_build_customer_order_status_html(order, event, store_name=name),
     )
+
+
+# ── Low stock alert email ────────────────────────────────────────────────────
+
+def _build_low_stock_email_html(
+    low_stock_items: list[dict], *, store_name: str | None = None
+) -> str:
+    """Build an HTML email listing products whose stock is at or below the threshold."""
+    store = store_name or settings.PROJECT_NAME
+
+    rows = ""
+    for item in low_stock_items:
+        stock_color = "#F44336" if item["stock"] == 0 else "#FF9800"
+        stock_label = "OUT OF STOCK" if item["stock"] == 0 else f'{item["stock"]} left'
+        rows += (
+            f'<tr>'
+            f'<td style="padding:12px 8px;border-bottom:1px solid #e0e0e0;color:#333">{item["name"]}</td>'
+            f'<td style="padding:12px 8px;border-bottom:1px solid #e0e0e0;text-align:center">'
+            f'<span style="background:{stock_color};color:white;padding:4px 10px;border-radius:12px;'
+            f'font-size:12px;font-weight:600">{stock_label}</span></td>'
+            f'</tr>'
+        )
+
+    return f"""
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:20px 0">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background:white;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.1)">
+    <tr>
+        <td style="background:#FF9800;padding:30px;text-align:center">
+            <div style="font-size:36px;margin-bottom:10px">⚠️</div>
+            <h1 style="margin:0;color:white;font-size:24px;font-weight:600">Low Stock Alert</h1>
+            <p style="margin:8px 0 0;color:rgba(255,255,255,0.9);font-size:14px">{store} Inventory Warning</p>
+        </td>
+    </tr>
+    <tr>
+        <td style="padding:30px">
+            <p style="color:#555;font-size:14px;margin:0 0 20px">
+                The following product(s) are running low on stock or are out of stock. Please restock soon.
+            </p>
+            <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e0e0e0;border-radius:4px;overflow:hidden">
+                <thead>
+                    <tr style="background:#f5f5f5">
+                        <th style="padding:12px 8px;text-align:left;color:#666;font-size:12px;font-weight:600;text-transform:uppercase">Product</th>
+                        <th style="padding:12px 8px;text-align:center;color:#666;font-size:12px;font-weight:600;text-transform:uppercase">Stock</th>
+                    </tr>
+                </thead>
+                <tbody>{rows}</tbody>
+            </table>
+        </td>
+    </tr>
+    <tr>
+        <td style="background:#f5f5f5;padding:24px;text-align:center;border-top:1px solid #e0e0e0">
+            <p style="margin:0;color:#999;font-size:12px">This is an automated low-stock alert from <strong>{store}</strong></p>
+        </td>
+    </tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>
+"""
+
+
+async def send_low_stock_alert_email(
+    admin_emails: list[str],
+    low_stock_items: list[dict],
+    *,
+    store_name: str | None = None,
+) -> None:
+    """Notify admin users about products that are low on stock or out of stock."""
+    if not admin_emails or not low_stock_items:
+        return
+    name = store_name or settings.PROJECT_NAME
+    count = len(low_stock_items)
+    await _send_mail(
+        subject=f"⚠️ Low Stock Alert: {count} product(s) need restocking — {name}",
+        recipients=admin_emails,
+        html_body=_build_low_stock_email_html(low_stock_items, store_name=name),
+    )
+
+
+# ── Password reset email ─────────────────────────────────────────────────────
+
+async def send_password_reset_email(
+    email: str, reset_link: str, *, store_name: str | None = None
+) -> None:
+    """Send a password reset link to the admin user."""
+    name = store_name or settings.PROJECT_NAME
+    await _send_mail(
+        subject=f"Reset Your Password — {name}",
+        recipients=[email],
+        html_body=f"""
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:20px 0">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background:white;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.1)">
+    <tr>
+        <td style="background:#2196F3;padding:30px;text-align:center">
+            <div style="font-size:36px;margin-bottom:10px">🔒</div>
+            <h1 style="margin:0;color:white;font-size:24px;font-weight:600">Password Reset</h1>
+            <p style="margin:8px 0 0;color:rgba(255,255,255,0.9);font-size:14px">{name}</p>
+        </td>
+    </tr>
+    <tr>
+        <td style="padding:30px">
+            <p style="color:#333;font-size:16px;margin:0 0 10px">Hello,</p>
+            <p style="color:#555;font-size:14px;line-height:1.6;margin:0 0 24px">
+                We received a request to reset your admin password.
+                Click the button below to set a new password.
+                This link will expire in <strong>{settings.PASSWORD_RESET_EXPIRE_MINUTES} minutes</strong>.
+            </p>
+            <div style="text-align:center;margin-bottom:24px">
+                <a href="{reset_link}" style="display:inline-block;background:#2196F3;color:white;text-decoration:none;padding:14px 36px;border-radius:6px;font-size:16px;font-weight:600">Reset Password</a>
+            </div>
+            <p style="color:#999;font-size:12px;margin:0 0 16px">
+                If you did not request this, please ignore this email. Your password will remain unchanged.
+            </p>
+            <div style="background:#f9f9f9;padding:12px;border-radius:4px;border-left:4px solid #FF9800">
+                <p style="margin:0;color:#666;font-size:12px">
+                    If the button doesn't work, copy and paste this link:<br>
+                    <a href="{reset_link}" style="color:#2196F3;word-break:break-all;font-size:11px">{reset_link}</a>
+                </p>
+            </div>
+        </td>
+    </tr>
+    <tr>
+        <td style="background:#f5f5f5;padding:24px;text-align:center;border-top:1px solid #e0e0e0">
+            <p style="margin:0;color:#999;font-size:12px">This is an automated email from <strong>{name}</strong></p>
+        </td>
+    </tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>
+""",
+    )

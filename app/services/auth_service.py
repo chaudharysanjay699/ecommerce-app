@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.security import (
     create_access_token,
+    create_password_reset_token,
     create_refresh_token,
     decode_token,
     hash_password,
@@ -22,15 +23,17 @@ from app.repositories.user_repository import OTPRepository, UserRepository
 from app.repositories.app_settings_repository import AppSettingsRepository
 from app.schemas.user import (
     AdminLogin,
+    ForgotPasswordRequest,
     OTPVerify,
     PasswordChange,
+    ResetPasswordRequest,
     TokenRefreshRequest,
     TokenResponse,
     UserLogin,
     UserRegister,
     UserUpdate,
 )
-from app.services.email_service import send_otp_email
+from app.services.email_service import send_otp_email, send_password_reset_email
 
 
 def _generate_otp(length: int = 6) -> str:
@@ -254,5 +257,49 @@ class AuthService:
                 detail="Current password is incorrect",
             )
         return await self.user_repo.update(
+            user, {"hashed_password": hash_password(payload.new_password)}
+        )
+
+    # ── Forgot / Reset Password ─────────────────────────────────────────────────────
+
+    async def forgot_password(self, payload: ForgotPasswordRequest) -> None:
+        """Generate a password-reset token and email it to the admin user."""
+        user = await self.user_repo.get_by_email(payload.email)
+        if not user or not user.is_admin:
+            # Return silently to avoid leaking whether the email exists
+            return
+
+        token = create_password_reset_token(str(user.id))
+        base = payload.base_url.rstrip("/")
+        reset_link = f"{base}/admin/reset-password?token={token}"
+
+        app_settings = await self.settings_repo.get_settings()
+        await send_password_reset_email(
+            email=user.email,
+            reset_link=reset_link,
+            store_name=app_settings.store_name,
+        )
+
+    async def reset_password(self, payload: ResetPasswordRequest) -> None:
+        """Validate the reset token and set the new password."""
+        credentials_exc = HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset link",
+        )
+        try:
+            data = decode_token(payload.token)
+            if data.get("type") != "password_reset":
+                raise credentials_exc
+            user_id: str | None = data.get("sub")
+            if not user_id:
+                raise credentials_exc
+        except JWTError:
+            raise credentials_exc
+
+        user = await self.user_repo.get_by_id(UUID(user_id))
+        if not user or not user.is_active:
+            raise credentials_exc
+
+        await self.user_repo.update(
             user, {"hashed_password": hash_password(payload.new_password)}
         )

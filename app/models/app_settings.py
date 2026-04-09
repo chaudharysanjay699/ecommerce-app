@@ -76,6 +76,15 @@ class AppSettings(Base, UUIDMixin, TimestampMixin):
         Boolean, default=True, nullable=False,
     )
 
+    # ── Low Stock Alert ─────────────────────────────────────────────────────
+    low_stock_threshold: Mapped[int] = mapped_column(
+        Integer, default=5, nullable=False,
+        comment="Send admin email when product stock falls to or below this value after an order",
+    )
+    low_stock_alert_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False,
+    )
+
     # ── Maintenance Mode ──────────────────────────────────────────────────────
     maintenance_mode: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False,

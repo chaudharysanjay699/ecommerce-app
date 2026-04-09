@@ -9,9 +9,11 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.schemas.user import (
     AdminLogin,
+    ForgotPasswordRequest,
     OTPRequest,
     OTPVerify,
     PasswordChange,
+    ResetPasswordRequest,
     TokenRefreshRequest,
     TokenResponse,
     UserLogin,
@@ -51,6 +53,26 @@ async def admin_login(
 ):
     """Admin login with phone or email + password. Returns JWT pair only if user is admin."""
     return await AuthService(db).admin_login(payload)
+
+
+@router.post("/admin/forgot-password")
+async def forgot_password(
+    payload: ForgotPasswordRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Send a password reset link to the admin's email address."""
+    await AuthService(db).forgot_password(payload)
+    return {"message": "If an admin account exists with this email, a reset link has been sent."}
+
+
+@router.post("/admin/reset-password")
+async def reset_password(
+    payload: ResetPasswordRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Reset admin password using the token from the reset email."""
+    await AuthService(db).reset_password(payload)
+    return {"message": "Password has been reset successfully."}
 
 
 @router.post("/refresh", response_model=TokenResponse)

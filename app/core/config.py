@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     # OTP
     OTP_EXPIRE_MINUTES: int = 10
 
+    # Password Reset
+    PASSWORD_RESET_EXPIRE_MINUTES: int = 30
+
     # Firebase Cloud Messaging (FCM)
     FIREBASE_PROJECT_ID: str = ""
     # Either an absolute file path to serviceAccountKey.json
