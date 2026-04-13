@@ -120,10 +120,10 @@ class AuthService:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Account is disabled",
             )
-        if not user.is_admin:
+        if not user.is_admin and not user.is_super_admin:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Admin privileges required",
+                detail="Invalid User",
             )
         return TokenResponse(
             access_token=create_access_token(str(user.id)),
@@ -147,7 +147,7 @@ class AuthService:
             raise credentials_exc
 
         user = await self.user_repo.get_by_id(UUID(user_id))
-        if not user or not user.is_active:
+        if not user or not user.is_active or user.is_deleted:
             raise credentials_exc
 
         return TokenResponse(
@@ -297,9 +297,24 @@ class AuthService:
             raise credentials_exc
 
         user = await self.user_repo.get_by_id(UUID(user_id))
-        if not user or not user.is_active:
+        if not user or not user.is_active or user.is_deleted:
             raise credentials_exc
 
         await self.user_repo.update(
             user, {"hashed_password": hash_password(payload.new_password)}
         )
+
+    # ── Account deletion ────────────────────────────────────────────────────────────
+
+    async def delete_account(self, user_id: UUID) -> None:
+        """Soft-delete the authenticated user's account."""
+        user = await self.user_repo.get_by_id(user_id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
+        if user.is_deleted:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Account already deleted"
+            )
+        await self.user_repo.soft_delete(user)

@@ -149,3 +149,12 @@ async def change_password(
 ):
     """Change the authenticated user's password."""
     return await AuthService(db).change_password(current_user.id, payload)
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_account(
+    current_user: Annotated[object, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Soft-delete the authenticated user's account."""
+    await AuthService(db).delete_account(current_user.id)

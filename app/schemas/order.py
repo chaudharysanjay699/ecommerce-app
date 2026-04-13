@@ -95,6 +95,7 @@ class OrderUserOut(BaseSchema):
     avatar_url: str | None
     is_active: bool
     is_verified: bool
+    is_deleted: bool = False
 
 
 class OrderOut(TimestampSchema):

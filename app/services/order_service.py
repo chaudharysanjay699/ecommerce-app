@@ -438,6 +438,11 @@ class OrderService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Cannot cancel an order with status '{order.status.value}'",
             )
+        if order.user and order.user.is_deleted:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot change status — user account has been deleted",
+            )
 
         # Restore stock for all items in the cancelled order
         for order_item in order.items:
@@ -502,6 +507,11 @@ class OrderService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Cannot update a cancelled order",
+            )
+        if order.user and order.user.is_deleted:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot change status — user account has been deleted",
             )
 
         # If changing status to CANCELLED, restore stock

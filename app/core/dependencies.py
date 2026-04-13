@@ -40,15 +40,17 @@ async def get_current_user(
     user = await repo.get_by_id(UUID(user_id))
     if user is None:
         raise credentials_exc
+    if user.is_deleted:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account has been deleted")
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user")
     return user
 
 
 async def get_current_admin(current_user=Depends(get_current_user)):
-    if not current_user.is_admin:
+    if not current_user.is_admin and not current_user.is_super_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin privileges required",
+            detail="Invalid User",
         )
     return current_user

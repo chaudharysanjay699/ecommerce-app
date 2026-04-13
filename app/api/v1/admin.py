@@ -58,11 +58,18 @@ async def get_dashboard_stats(
         from app.repositories.product_repository import ProductRepository
         from app.repositories.order_repository import OrderRepository
         
-        # Get total and active users
-        total_users = await UserRepository(db).count()
+        # Get total and active users (exclude deleted and super-admin)
+        result = await db.execute(
+            select(func.count()).select_from(User).where(
+                User.is_deleted == False, User.is_super_admin == False
+            )
+        )
+        total_users = result.scalar_one()
         
         result = await db.execute(
-            select(func.count()).select_from(User).where(User.is_active == True)
+            select(func.count()).select_from(User).where(
+                User.is_active == True, User.is_deleted == False, User.is_super_admin == False
+            )
         )
         active_users = result.scalar_one()
         
@@ -129,9 +136,9 @@ async def list_users(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
 ):
-    """Return a paginated list of all users."""
+    """Return a paginated list of users (excludes deleted and super-admin users)."""
     from app.repositories.user_repository import UserRepository
-    return await UserRepository(db).list(skip, limit)
+    return await UserRepository(db).list_for_admin(skip, limit)
 
 
 @router.patch("/users/{user_id}", response_model=UserOut)

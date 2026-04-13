@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import select
@@ -19,16 +20,22 @@ class UserRepository(BaseRepository[User]):
     # ── Specific queries ──────────────────────────────────────────────────────
 
     async def get_by_phone(self, phone: str) -> User | None:
-        """Return a user matching the given phone number."""
+        """Return a non-deleted user matching the given phone number."""
         result = await self.db.execute(
-            select(User).where(User.phone == phone, User.is_active == True)
+            select(User).where(
+                User.phone == phone,
+                User.is_deleted == False,  # noqa: E712
+            )
         )
         return result.scalars().first()
 
     async def get_by_email(self, email: str) -> User | None:
-        """Return a user matching the given email address."""
+        """Return a non-deleted user matching the given email address."""
         result = await self.db.execute(
-            select(User).where(User.email == email)
+            select(User).where(
+                User.email == email,
+                User.is_deleted == False,  # noqa: E712
+            )
         )
         return result.scalars().first()
 
@@ -42,10 +49,26 @@ class UserRepository(BaseRepository[User]):
         return result.scalars().first()
 
     async def list_active(self, skip: int = 0, limit: int = 100):
-        """Return only active (non-suspended) users."""
+        """Return only active (non-suspended, non-deleted) users."""
         result = await self.db.execute(
             select(User)
-            .where(User.is_active == True)  # noqa: E712
+            .where(
+                User.is_active == True,  # noqa: E712
+                User.is_deleted == False,  # noqa: E712
+            )
+            .offset(skip)
+            .limit(limit)
+        )
+        return result.scalars().all()
+
+    async def list_for_admin(self, skip: int = 0, limit: int = 100):
+        """Return users visible to admin — excludes deleted and super-admin users."""
+        result = await self.db.execute(
+            select(User)
+            .where(
+                User.is_deleted == False,  # noqa: E712
+                User.is_super_admin == False,  # noqa: E712
+            )
             .offset(skip)
             .limit(limit)
         )
@@ -58,10 +81,19 @@ class UserRepository(BaseRepository[User]):
             .where(
                 User.is_admin == True,  # noqa: E712
                 User.is_active == True,  # noqa: E712
+                User.is_deleted == False,  # noqa: E712
                 User.email.isnot(None),
             )
         )
         return [row[0] for row in result.all() if row[0]]
+
+    async def soft_delete(self, user: User) -> User:
+        """Mark a user as deleted and deactivate them."""
+        return await self.update(user, {
+            "is_deleted": True,
+            "is_active": False,
+            "deleted_at": datetime.now(timezone.utc),
+        })
 
 
 class OTPRepository(BaseRepository[OTP]):
