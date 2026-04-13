@@ -196,6 +196,22 @@ class AuthService:
                 status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
             )
 
+        # Check static test OTP for the configured test user
+        is_static_otp = (
+            settings.TEST_USER_IDENTIFIER
+            and settings.TEST_USER_OTP
+            and payload.identifier == settings.TEST_USER_IDENTIFIER
+            and payload.code == settings.TEST_USER_OTP
+        )
+
+        if is_static_otp:
+            # Accept static OTP — skip DB OTP validation
+            await self.user_repo.update(user, {"is_verified": True})
+            return TokenResponse(
+                access_token=create_access_token(str(user.id)),
+                refresh_token=create_refresh_token(str(user.id)),
+            )
+
         otp = await self.otp_repo.get_latest_for_user(user.id)
         if not otp:
             raise HTTPException(

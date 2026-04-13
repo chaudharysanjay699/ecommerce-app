@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     # OTP
     OTP_EXPIRE_MINUTES: int = 10
 
+    # Static test OTP (only works for TEST_USER_IDENTIFIER)
+    TEST_USER_IDENTIFIER: str = ""
+    TEST_USER_OTP: str = ""
+
     # Password Reset
     PASSWORD_RESET_EXPIRE_MINUTES: int = 30
 
