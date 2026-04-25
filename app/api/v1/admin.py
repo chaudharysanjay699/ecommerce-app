@@ -874,24 +874,31 @@ async def create_and_download_backup(
         - pg_dump to be installed and available in PATH
         - Super admin authentication
     """
-    from app.services.backup_service import BackupService
-    
-    service = BackupService()
-    backup_info = await service.create_backup()
-    
-    # Clean up old backups (keep last 10)
-    deleted_count = service.delete_old_backups(keep_count=10)
-    if deleted_count > 0:
-        logger.info(f"Cleaned up {deleted_count} old backup(s)")
-    
-    return FileResponse(
-        path=backup_info["file_path"],
-        media_type="application/sql",
-        filename=backup_info["filename"],
-        headers={
-            "Content-Disposition": f'attachment; filename="{backup_info["filename"]}"'
-        }
-    )
+    try:
+        from app.services.backup_service import BackupService
+        
+        service = BackupService()
+        backup_info = await service.create_backup()
+        
+        # Clean up old backups (keep last 10)
+        deleted_count = service.delete_old_backups(keep_count=10)
+        if deleted_count > 0:
+            logger.info(f"Cleaned up {deleted_count} old backup(s)")
+        
+        return FileResponse(
+            path=backup_info["file_path"],
+            media_type="application/sql",
+            filename=backup_info["filename"],
+            headers={
+                "Content-Disposition": f'attachment; filename="{backup_info["filename"]}"'
+            }
+        )
+    except Exception as e:
+        logger.error(f"Backup creation/download failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create and download backup"
+        )
 
 
 # ── App Settings ──────────────────────────────────────────────────────────────

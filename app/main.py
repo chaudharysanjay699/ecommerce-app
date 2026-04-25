@@ -1,15 +1,28 @@
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
 from app.api.v1 import api_router
 from app.core.config import settings
+from app.core.middleware import ExceptionHandlerMiddleware
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler("app.log"),
+        logging.StreamHandler(),
+    ],
+)
 
 
 @asynccontextmanager
@@ -28,6 +41,35 @@ def create_application() -> FastAPI:
         redoc_url=f"{settings.API_V1_STR}/redoc",
         lifespan=lifespan,
     )
+
+    # ── Exception Handling (Dual Protection) ──────────────────────────────────
+    # This ensures the application NEVER crashes due to API exceptions
+    # Layer 1: Global exception handler (catches exceptions at FastAPI level)
+    # Layer 2: Middleware (catches exceptions during request processing)
+    
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request: Request, exc: Exception):
+        """Catch any unhandled exceptions to prevent app crashes."""
+        logger = logging.getLogger(__name__)
+        logger.error(
+            f"Global exception handler caught: {type(exc).__name__}: {str(exc)}",
+            exc_info=True,
+            extra={
+                "method": request.method,
+                "url": str(request.url),
+                "client": request.client.host if request.client else None,
+            },
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "detail": "An internal server error occurred. The application is still running.",
+                "error_type": type(exc).__name__,
+            },
+        )
+
+    # Exception Handler Middleware (second layer of protection)
+    app.add_middleware(ExceptionHandlerMiddleware)
 
     # ── CORS ──────────────────────────────────────────────────────────────────
     app.add_middleware(
