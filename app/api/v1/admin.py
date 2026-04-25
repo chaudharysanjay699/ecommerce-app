@@ -336,17 +336,19 @@ async def delete_product(
     _: Admin,
     db: DB,
 ):
-    """Delete a product."""
-    from app.repositories.product_repository import ProductRepository
-    from app.repositories.uploaded_file_repository import UploadedFileRepository
-    
-    repo = ProductRepository(db)
-    product = await repo.get_by_id(product_id)
-    if not product:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
-    # Soft delete: set is_deleted to True
-    await repo.update(product, {"is_deleted": True})
+    """Soft delete a product (sets is_deleted=True)."""
+    await ProductService(db).delete(product_id)
     return None
+
+
+@router.post("/products/{product_id}/restore", response_model=ProductOut)
+async def restore_product(
+    product_id: UUID,
+    _: Admin,
+    db: DB,
+):
+    """Restore a soft-deleted product."""
+    return await ProductService(db).restore(product_id)
 
 
 @router.get("/products/out-of-stock", response_model=list[ProductOut])
@@ -438,19 +440,35 @@ async def upload_product_image(
 async def list_all_categories(
     _: Admin,
     db: DB,
+    include_deleted: bool = False,
 ):
-    """Return all categories with subcategories (including inactive) for admin management."""
+    """Return all categories with subcategories for admin management. Set include_deleted=true to see deleted categories."""
     from app.repositories.product_repository import CategoryRepository
     from sqlalchemy.orm import selectinload
     from sqlalchemy import select
     from app.models.product import Category
-    result = await db.execute(
-        select(Category)
-        .options(selectinload(Category.children))
-        .where(Category.is_deleted == False)
-        .order_by(Category.sort_order, Category.name)
-    )
-    return result.scalars().all()
+    
+    if include_deleted:
+        result = await db.execute(
+            select(Category)
+            .options(selectinload(Category.children))
+            .order_by(Category.is_deleted, Category.sort_order, Category.name)
+        )
+        categories = result.scalars().all()
+    else:
+        result = await db.execute(
+            select(Category)
+            .options(selectinload(Category.children))
+            .where(Category.is_deleted == False)
+            .order_by(Category.sort_order, Category.name)
+        )
+        categories = result.scalars().all()
+    
+    # Filter out deleted children from all categories
+    for category in categories:
+        category.children = [child for child in category.children if not child.is_deleted]
+    
+    return categories
 
 
 @router.post("/categories", response_model=CategoryOut, status_code=status.HTTP_201_CREATED)
@@ -491,17 +509,19 @@ async def delete_category(
     _: Admin,
     db: DB,
 ):
-    """Delete a category."""
-    from app.repositories.product_repository import CategoryRepository
-    from app.repositories.uploaded_file_repository import UploadedFileRepository
-    
-    repo = CategoryRepository(db)
-    category = await repo.get_by_id(category_id)
-    if not category:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
-    # Soft delete: set is_deleted to True
-    await repo.update(category, {"is_deleted": True})
+    """Soft delete a category (sets is_deleted=True)."""
+    await CategoryService(db).delete(category_id)
     return None
+
+
+@router.post("/categories/{category_id}/restore", response_model=CategoryOut)
+async def restore_category(
+    category_id: UUID,
+    _: Admin,
+    db: DB,
+):
+    """Restore a soft-deleted category."""
+    return await CategoryService(db).restore(category_id)
 
 
 @router.post("/categories/upload-image")

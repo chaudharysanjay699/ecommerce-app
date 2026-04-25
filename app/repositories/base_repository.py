@@ -27,7 +27,7 @@ class BaseRepository(Generic[ModelT]):
     async def get_by_id(self, id: UUID) -> ModelT | None:
         """Return a single record by primary key, or None."""
         result = await self.db.execute(
-            select(self.model).where(self.model.id == id)
+            select(self.model).where(self.model.id == id, self.model.is_deleted == False)
         )
         return result.scalars().first()
 

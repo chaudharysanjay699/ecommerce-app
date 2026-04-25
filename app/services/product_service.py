@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -20,9 +21,36 @@ class CategoryService:
     def __init__(self, db: AsyncSession) -> None:
         self.repo = CategoryRepository(db)
 
+    def _slugify(self, text: str) -> str:
+        """Convert text to a URL-friendly slug."""
+        # Convert to lowercase
+        text = text.lower()
+        # Replace spaces and special characters with hyphens
+        text = re.sub(r'[^\w\s-]', '', text)
+        text = re.sub(r'[-\s]+', '-', text)
+        # Remove leading/trailing hyphens
+        return text.strip('-')
+
+    async def _generate_unique_slug(self, base_name: str) -> str:
+        """Generate a unique slug from the category name, adding suffix if needed."""
+        base_slug = self._slugify(base_name)
+        slug = base_slug
+        counter = 1
+        
+        # Keep trying until we find a unique slug (checking all categories including deleted)
+        while await self.repo.get_by_slug_including_deleted(slug):
+            slug = f"{base_slug}-{counter}"
+            counter += 1
+        
+        return slug
+
     async def list_active(self, skip: int = 0, limit: int = 100):
         """Return all active categories (all levels)."""
         return await self.repo.list_active(skip, limit)
+
+    async def list_all_including_deleted(self, skip: int = 0, limit: int = 100):
+        """Return all categories including deleted ones (admin use)."""
+        return await self.repo.list_all_including_deleted(skip, limit)
 
     async def list_top_level(self, skip: int = 0, limit: int = 100):
         """Return active top-level (parent) categories only."""
@@ -50,17 +78,19 @@ class CategoryService:
         return category
 
     async def create(self, payload: CategoryCreate) -> Category:
-        """Admin: create a new category. Raises 409 on duplicate slug."""
-        if await self.repo.get_by_slug(payload.slug):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Category slug already exists",
-            )
-        category = Category(**payload.model_dump())
+        """Admin: create a new category with auto-generated unique slug from name."""
+        # Auto-generate unique slug from category name (ignore payload.slug if provided)
+        unique_slug = await self._generate_unique_slug(payload.name)
+        
+        # Create category data
+        data = payload.model_dump()
+        data["slug"] = unique_slug  # Override with auto-generated slug
+        
+        category = Category(**data)
         return await self.repo.create(category)
 
     async def update(self, category_id: UUID, payload: CategoryUpdate) -> Category:
-        """Admin: partially update a category."""
+        """Admin: partially update a category. Slug changes are not allowed."""
         category = await self.repo.get_by_id(category_id)
         if not category:
             raise HTTPException(
@@ -69,13 +99,40 @@ class CategoryService:
         data = payload.model_dump(exclude_none=True)
         if not data:
             return category
-        if "slug" in data and data["slug"] != category.slug:
-            if await self.repo.get_by_slug(data["slug"]):
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Category slug already exists",
-                )
+        
+        # Remove slug from update data if provided (slug is immutable)
+        if "slug" in data:
+            del data["slug"]
+        
         return await self.repo.update(category, data)
+
+    async def delete(self, category_id: UUID) -> None:
+        """Admin: soft delete a category (sets is_deleted=True and is_active=False)."""
+        category = await self.repo.get_by_id(category_id)
+        if not category:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Category not found"
+            )
+        if category.is_deleted:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Category is already deleted"
+            )
+        await self.repo.soft_delete(category)
+
+    async def restore(self, category_id: UUID) -> Category:
+        """Admin: restore a soft-deleted category (sets is_deleted=False and is_active=True)."""
+        category = await self.repo.get_by_id(category_id)
+        if not category:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Category not found"
+            )
+        if not category.is_deleted:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Category is not deleted"
+            )
+        return await self.repo.update(category, {"is_deleted": False, "is_active": True})
 
     async def toggle_status(self, category_id: UUID) -> Category:
         """Admin: toggle is_active on a category."""
@@ -220,3 +277,31 @@ class ProductService:
             "Product Out of Stock ⚠️",
             f'"{product.name}" is currently out of stock.',
         )
+
+    async def delete(self, product_id: UUID) -> None:
+        """Admin: soft delete a product (sets is_deleted=True and is_active=False)."""
+        product = await self.repo.get_by_id(product_id)
+        if not product:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Product not found"
+            )
+        if product.is_deleted:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Product is already deleted"
+            )
+        await self.repo.soft_delete(product)
+
+    async def restore(self, product_id: UUID) -> Product:
+        """Admin: restore a soft-deleted product (sets is_deleted=False and is_active=True)."""
+        product = await self.repo.get_by_id(product_id)
+        if not product:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Product not found"
+            )
+        if not product.is_deleted:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Product is not deleted"
+            )
+        return await self.repo.update(product, {"is_deleted": False, "is_active": True})
