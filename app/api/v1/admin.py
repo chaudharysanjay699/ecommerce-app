@@ -447,6 +447,7 @@ async def list_all_categories(
     result = await db.execute(
         select(Category)
         .options(selectinload(Category.children))
+        .where(Category.is_deleted == False)
         .order_by(Category.sort_order, Category.name)
     )
     return result.scalars().all()
