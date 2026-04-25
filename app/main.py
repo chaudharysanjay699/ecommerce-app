@@ -4,9 +4,8 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
@@ -42,36 +41,8 @@ def create_application() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # ── Exception Handling (Dual Protection) ──────────────────────────────────
-    # This ensures the application NEVER crashes due to API exceptions
-    # Layer 1: Global exception handler (catches exceptions at FastAPI level)
-    # Layer 2: Middleware (catches exceptions during request processing)
-    
-    @app.exception_handler(Exception)
-    async def global_exception_handler(request: Request, exc: Exception):
-        """Catch any unhandled exceptions to prevent app crashes."""
-        logger = logging.getLogger(__name__)
-        logger.error(
-            f"Global exception handler caught: {type(exc).__name__}: {str(exc)}",
-            exc_info=True,
-            extra={
-                "method": request.method,
-                "url": str(request.url),
-                "client": request.client.host if request.client else None,
-            },
-        )
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={
-                "detail": "An internal server error occurred. The application is still running.",
-                "error_type": type(exc).__name__,
-            },
-        )
-
-    # Exception Handler Middleware (second layer of protection)
-    app.add_middleware(ExceptionHandlerMiddleware)
-
-    # ── CORS ──────────────────────────────────────────────────────────────────
+    # ── CORS (added first, but executes last - outermost layer) ──────────────
+    # CORS must be the outermost layer to add headers to ALL responses including errors
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.BACKEND_CORS_ORIGINS,
@@ -79,6 +50,10 @@ def create_application() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # ── Exception Handler Middleware ──────────────────────────────────────────
+    # Catches all unhandled exceptions, logs them, and prevents app crashes
+    app.add_middleware(ExceptionHandlerMiddleware)
 
     # ── Static Files ──────────────────────────────────────────────────────────
     # Serve uploaded files (images, etc.)
