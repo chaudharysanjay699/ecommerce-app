@@ -53,11 +53,11 @@ RUN mkdir -p uploads/pdfs uploads/products uploads/categories uploads/banners up
 
 USER appuser
 
-EXPOSE 80
+EXPOSE 8000
 
 # Healthcheck: hit the /health endpoint
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Production entrypoint (no --reload)
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "80", "--workers", "2"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]

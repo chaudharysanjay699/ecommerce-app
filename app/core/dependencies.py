@@ -54,3 +54,12 @@ async def get_current_admin(current_user=Depends(get_current_user)):
             detail="Invalid User",
         )
     return current_user
+
+
+async def get_current_super_admin(current_user=Depends(get_current_user)):
+    if not current_user.is_super_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Super admin access required",
+        )
+    return current_user
