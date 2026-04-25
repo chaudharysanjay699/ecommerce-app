@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.dependencies import get_current_admin
+from app.core.dependencies import get_current_admin, get_current_super_admin
 from app.models.order import Order, OrderStatus
 from app.models.product import Product
 from app.models.user import User
@@ -37,6 +37,7 @@ router = APIRouter(prefix="/admin", tags=["Admin"])
 
 # ── Shorthand dependency alias & Models ───────────────────────────────────────
 Admin = Annotated[object, Depends(get_current_admin)]
+SuperAdmin = Annotated[object, Depends(get_current_super_admin)]
 DB = Annotated[AsyncSession, Depends(get_db)]
 
 
@@ -757,6 +758,140 @@ async def upload_banner_image(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
+
+
+# ── Database Backup ───────────────────────────────────────────────────────────
+
+@router.post("/backup/create")
+async def create_database_backup(
+    _: SuperAdmin,
+    backup_name: str | None = None,
+):
+    """
+    Create a database backup using pg_dump.
+    
+    The backup file will be stored in the backups/ directory with a timestamped filename.
+    
+    Args:
+        backup_name: Optional custom name for the backup file (auto-generated if not provided)
+    
+    Returns:
+        Backup details including filename, file size, and creation timestamp
+    
+    Requires:
+        - pg_dump to be installed and available in PATH
+        - Super admin authentication
+    """
+    from app.services.backup_service import BackupService
+    
+    service = BackupService()
+    backup_info = await service.create_backup(backup_name)
+    
+    # Clean up old backups (keep last 10)
+    deleted_count = service.delete_old_backups(keep_count=10)
+    if deleted_count > 0:
+        logger.info(f"Cleaned up {deleted_count} old backup(s)")
+    
+    return backup_info
+
+
+@router.get("/backup/download/{filename}")
+async def download_database_backup(
+    filename: str,
+    _: SuperAdmin,
+):
+    """
+    Download a database backup file.
+    
+    Args:
+        filename: Name of the backup file to download
+    
+    Returns:
+        The backup file as a downloadable SQL file
+    
+    Requires:
+        - Super admin authentication
+    """
+    from app.services.backup_service import BackupService
+    
+    service = BackupService()
+    backup_path = service.get_backup_path(filename)
+    
+    if not backup_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Backup file not found"
+        )
+    
+    return FileResponse(
+        path=str(backup_path),
+        media_type="application/sql",
+        filename=filename,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )
+
+
+@router.get("/backup/list")
+async def list_database_backups(
+    _: SuperAdmin,
+):
+    """
+    List all available database backup files.
+    
+    Returns:
+        List of backup files with details (filename, size, created_at)
+    
+    Requires:
+        - Super admin authentication
+    """
+    from app.services.backup_service import BackupService
+    
+    service = BackupService()
+    backups = service.list_backups()
+    
+    return {
+        "backups": backups,
+        "total_count": len(backups)
+    }
+
+
+@router.post("/backup/create-and-download")
+async def create_and_download_backup(
+    _: SuperAdmin,
+):
+    """
+    Create a database backup and immediately return it for download.
+    
+    This endpoint is useful for the React admin panel's "Backup" button.
+    It creates a backup and returns it as a downloadable file in one request.
+    
+    Returns:
+        The backup file as a downloadable SQL file
+    
+    Requires:
+        - pg_dump to be installed and available in PATH
+        - Super admin authentication
+    """
+    from app.services.backup_service import BackupService
+    
+    service = BackupService()
+    backup_info = await service.create_backup()
+    
+    # Clean up old backups (keep last 10)
+    deleted_count = service.delete_old_backups(keep_count=10)
+    if deleted_count > 0:
+        logger.info(f"Cleaned up {deleted_count} old backup(s)")
+    
+    return FileResponse(
+        path=backup_info["file_path"],
+        media_type="application/sql",
+        filename=backup_info["filename"],
+        headers={
+            "Content-Disposition": f'attachment; filename="{backup_info["filename"]}"'
+        }
+    )
 
 
 # ── App Settings ──────────────────────────────────────────────────────────────

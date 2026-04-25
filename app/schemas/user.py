@@ -138,6 +138,7 @@ class UserOut(TimestampSchema):
     is_active: bool
     is_verified: bool
     is_admin: bool
+    is_super_admin: bool
 
 
 class UserProfile(UserOut):
