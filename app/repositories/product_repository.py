@@ -20,11 +20,22 @@ class CategoryRepository(BaseRepository[Category]):
     # ── Specific queries ──────────────────────────────────────────────────────
 
     async def get_by_slug(self, slug: str) -> Category | None:
-        """Return a category by its URL slug."""
+        """Return a category by its URL slug (only non-deleted)."""
+        result = await self.db.execute(
+            select(Category).where(Category.slug == slug, Category.is_deleted == False)
+        )
+        return result.scalars().first()
+
+    async def get_by_slug_including_deleted(self, slug: str) -> Category | None:
+        """Return a category by its URL slug, including soft-deleted ones."""
         result = await self.db.execute(
             select(Category).where(Category.slug == slug)
         )
         return result.scalars().first()
+
+    async def soft_delete(self, category: Category) -> Category:
+        """Soft delete a category by setting is_deleted=True."""
+        return await self.update(category, {"is_deleted": True, "is_active": False})
 
     async def list_active(self, skip: int = 0, limit: int = 100):
         """Return all active, non-deleted categories (all levels), ordered by sort_order then name."""
@@ -32,6 +43,16 @@ class CategoryRepository(BaseRepository[Category]):
             select(Category)
             .where(Category.is_active == True, Category.is_deleted == False)  
             .order_by(Category.sort_order, Category.name)
+            .offset(skip)
+            .limit(limit)
+        )
+        return result.scalars().all()
+
+    async def list_all_including_deleted(self, skip: int = 0, limit: int = 100):
+        """Return all categories including deleted ones (admin use), ordered by sort_order then name."""
+        result = await self.db.execute(
+            select(Category)
+            .order_by(Category.is_deleted, Category.sort_order, Category.name)
             .offset(skip)
             .limit(limit)
         )
@@ -62,7 +83,7 @@ class CategoryRepository(BaseRepository[Category]):
         result = await self.db.execute(
             select(Category)
             .options(selectinload(Category.children))
-            .where(Category.parent_id == None)  
+            .where(Category.parent_id == None, Category.is_deleted == False)
             .order_by(Category.sort_order, Category.name)
             .offset(skip)
             .limit(limit)
@@ -186,3 +207,7 @@ class ProductRepository(BaseRepository[Product]):
             .limit(limit)
         )
         return result.scalars().all()
+
+    async def soft_delete(self, product: Product) -> Product:
+        """Soft delete a product by setting is_deleted=True."""
+        return await self.update(product, {"is_deleted": True, "is_active": False})

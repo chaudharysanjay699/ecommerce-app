@@ -41,7 +41,7 @@ class CategoryCreate(BaseSchema):
 
     name: str = Field(..., min_length=2, max_length=100)
     name_hi: str | None = Field(default=None, max_length=100)
-    slug: str = Field(..., min_length=2, max_length=120, pattern=r"^[a-z0-9-]+$")
+    slug: str | None = Field(default=None, min_length=2, max_length=120, pattern=r"^[a-z0-9-]+$")
     # type is optional — parent categories may have no type; assign types to sub-categories
     type: CategoryType | None = None
     description: str | None = None
