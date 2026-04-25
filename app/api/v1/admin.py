@@ -443,29 +443,32 @@ async def list_all_categories(
     include_deleted: bool = False,
 ):
     """Return all categories with subcategories for admin management. Set include_deleted=true to see deleted categories."""
+    from app.repositories.product_repository import CategoryRepository
+    from sqlalchemy.orm import selectinload
+    from sqlalchemy import select
+    from app.models.product import Category
+    
     if include_deleted:
-        from app.repositories.product_repository import CategoryRepository
-        from sqlalchemy.orm import selectinload
-        from sqlalchemy import select
-        from app.models.product import Category
         result = await db.execute(
             select(Category)
             .options(selectinload(Category.children))
             .order_by(Category.is_deleted, Category.sort_order, Category.name)
         )
-        return result.scalars().all()
+        categories = result.scalars().all()
     else:
-        from app.repositories.product_repository import CategoryRepository
-        from sqlalchemy.orm import selectinload
-        from sqlalchemy import select
-        from app.models.product import Category
         result = await db.execute(
             select(Category)
             .options(selectinload(Category.children))
             .where(Category.is_deleted == False)
             .order_by(Category.sort_order, Category.name)
         )
-        return result.scalars().all()
+        categories = result.scalars().all()
+    
+    # Filter out deleted children from all categories
+    for category in categories:
+        category.children = [child for child in category.children if not child.is_deleted]
+    
+    return categories
 
 
 @router.post("/categories", response_model=CategoryOut, status_code=status.HTTP_201_CREATED)

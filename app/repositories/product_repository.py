@@ -88,7 +88,13 @@ class CategoryRepository(BaseRepository[Category]):
             .offset(skip)
             .limit(limit)
         )
-        return result.scalars().all()
+        categories = result.scalars().all()
+        
+        # Filter out deleted children
+        for category in categories:
+            category.children = [child for child in category.children if not child.is_deleted]
+        
+        return categories
 
     async def list_children(self, parent_id: UUID):
         """Return all active, non-deleted subcategories of a given parent."""
