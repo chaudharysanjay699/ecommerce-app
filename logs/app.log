@@ -1,0 +1,6 @@
+2026-04-26 14:40:40,613 - app.services.email_service - INFO - Email sent: Your Vidharthi Store OTP -> ['chaudharysanjay699@gmail.com']
+2026-04-26 14:41:30,313 - app.services.email_service - INFO - Email sent: Your Vidharthi Store OTP -> ['chaudharysanjay699@gmail.com']
+2026-04-26 14:49:35,475 - app.services.pdf_service - INFO - Invoice PDF generated: http://localhost:8000/uploads/pdfs/invoice_6bbde858-c1d1-4cba-9699-2f92763e9ddb.pdf
+2026-04-26 14:49:35,510 - app.services.pdf_service - INFO - Shipping label PDF generated: http://localhost:8000/uploads/pdfs/shipping_label_6bbde858-c1d1-4cba-9699-2f92763e9ddb.pdf
+2026-04-26 14:49:39,584 - app.services.email_service - INFO - Email sent: Invoice for Order #6bbde858-c1d1-4cba-9699-2f92763e9ddb — Vidharthi Store -> ['chaudharysanjay699@gmail.com']
+2026-04-26 14:55:27,466 - app.services.email_service - INFO - Email sent: Your Vidharthi Store OTP -> ['chaudharysanjay699@gmail.com']

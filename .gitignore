@@ -29,4 +29,7 @@ venv/
 htmlcov/
 
 # Docker
-*.log
+# *.log
+
+*.md
+
