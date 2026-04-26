@@ -52,7 +52,7 @@ async def _send_mail(subject: str, recipients: list[str], html_body: str) -> Non
             subtype=MessageType.html,
         )
         await FastMail(_mail_config()).send_message(message)
-        logger.info("Email sent: %s → %s", subject, recipients)
+        logger.info("Email sent: %s -> %s", subject, recipients)
     except Exception:
         logger.exception("Failed to send email: %s → %s", subject, recipients)
 

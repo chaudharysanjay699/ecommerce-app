@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -10,6 +11,24 @@ import uvicorn
 
 from app.api.v1 import api_router
 from app.core.config import settings
+from app.core.middleware import ExceptionHandlerMiddleware
+
+# Configure logging
+log_dir = Path("logs")
+log_dir.mkdir(parents=True, exist_ok=True)
+
+handlers = [logging.StreamHandler()]
+try:
+    handlers.append(logging.FileHandler(log_dir / "app.log"))
+except (PermissionError, OSError):
+    # Fallback to console-only if file creation fails
+    pass
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=handlers,
+)
 
 
 @asynccontextmanager
@@ -29,7 +48,7 @@ def create_application() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # ── CORS ──────────────────────────────────────────────────────────────────
+    # ── CORS (outermost layer) ────────────────────────────────────────────────
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.BACKEND_CORS_ORIGINS,
@@ -37,6 +56,9 @@ def create_application() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # ── Exception Handler Middleware ──────────────────────────────────────────
+    app.add_middleware(ExceptionHandlerMiddleware)
 
     # ── Static Files ──────────────────────────────────────────────────────────
     # Serve uploaded files (images, etc.)
