@@ -42,7 +42,7 @@ async def list_categories_tree(db: Annotated[AsyncSession, Depends(get_db)]):
 async def list_categories(
     db: Annotated[AsyncSession, Depends(get_db)],
     skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=100, ge=1, le=200),
+    limit: int = Query(default=500, ge=1, le=1000),
     parent_id: UUID | None = Query(default=None, description="Filter subcategories of a parent"),
     top_level: bool = Query(default=False, description="Return only top-level categories"),
 ):
@@ -114,7 +114,7 @@ async def list_products(
     category_id: UUID | None = Query(default=None),
     search: str | None = Query(default=None, min_length=1),
     skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=30, ge=1, le=100),
+    limit: int = Query(default=500, ge=1, le=1000),
     sort_by: str | None = Query(default=None, description="Sort by: 'popular' for most ordered"),
 ):
     """Return active products with nested category. Supports category filter, text search, and popularity sorting."""
