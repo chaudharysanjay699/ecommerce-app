@@ -28,6 +28,7 @@ from app.repositories.product_repository import ProductRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.order import AdminOrderCancel, OrderCreate, OrderStatusUpdate
 from app.services.email_service import send_admin_order_email, send_invoice_email, send_low_stock_alert_email
+from app.utils.background_tasks import create_safe_task
 
 logger = logging.getLogger(__name__)
 
@@ -308,7 +309,7 @@ class OrderService:
             except Exception:
                 logger.exception("Background post-order tasks failed for order %s", order_id)
 
-        asyncio.create_task(_post_order_tasks())
+        create_safe_task(_post_order_tasks(), task_name=f"post_order_tasks_{order_id}")
 
         return full_order
 
@@ -407,7 +408,7 @@ class OrderService:
             except Exception:
                 logger.exception("Background cancel tasks failed for order %s", _order_id)
 
-        asyncio.create_task(_post_cancel_tasks())
+        create_safe_task(_post_cancel_tasks(), task_name=f"post_cancel_tasks_{_order_id}")
 
         return full_order
 
@@ -490,7 +491,7 @@ class OrderService:
             except Exception:
                 logger.exception("Background admin-cancel tasks failed for order %s", _order_id)
 
-        asyncio.create_task(_post_admin_cancel_tasks())
+        create_safe_task(_post_admin_cancel_tasks(), task_name=f"admin_cancel_tasks_{_order_id}")
 
         return full_order
 
@@ -586,6 +587,6 @@ class OrderService:
             except Exception:
                 logger.exception("Background status-update tasks failed for order %s", _order_id)
 
-        asyncio.create_task(_post_status_update_tasks())
+        create_safe_task(_post_status_update_tasks(), task_name=f"status_update_tasks_{_order_id}")
 
         return full_order
