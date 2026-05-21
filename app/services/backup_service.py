@@ -35,7 +35,7 @@ class BackupService:
     - Owner and privilege independence for portable backups
     - Lock wait timeout to prevent indefinite blocking
     - Quoted identifiers for better compatibility
-    - Safe restore with --clean and --if-exists (DROP IF EXISTS before CREATE)
+    - Data-safe backups (no DROP TABLE commands - preserves existing data)
     """
 
     def __init__(self, backup_dir: str = "backups"):
@@ -132,8 +132,8 @@ class BackupService:
                 "--verbose",  # Show detailed progress (logged to stderr)
                 "--no-owner",  # Don't output commands to set ownership
                 "--no-privileges",  # Don't output commands to set privileges (ACLs)
-                "--clean",  # Add DROP commands before CREATE commands
-                "--if-exists",  # Use IF EXISTS with DROP commands (safer restores)
+                # NOTE: --clean and --if-exists flags REMOVED to prevent accidental data loss during restores
+                # Backups now contain only INSERT statements, not DROP TABLE commands
                 "--quote-all-identifiers",  # Quote all identifiers for better compatibility
                 "--lock-wait-timeout=30000",  # Wait max 30 seconds for locks (milliseconds)
             ]

@@ -33,7 +33,7 @@ This backup service is optimized for PostgreSQL 16.3+ with the following feature
    - Verbose logging for detailed progress tracking
    - Owner and privilege independence for portable backups
    - Quoted identifiers for better compatibility across PostgreSQL versions
-   - `--clean` and `--if-exists` for safe database restores (DROP IF EXISTS before CREATE)
+   - Data-safe backups (no DROP commands - preserves existing database structures)
    - Lock wait timeout (30 seconds) to prevent indefinite blocking
    - 5-minute operation timeout to prevent hanging operations
 
@@ -418,15 +418,15 @@ export default DatabaseBackup;
 
 The backup files are created with PostgreSQL 16.3+ options for safe and portable restores.
 
-**Important**: Backups include `DROP IF EXISTS` statements before CREATE statements, which means:
-- You can safely restore to an existing database
-- Existing objects will be dropped and recreated
-- Make sure you have a backup before restoring!
+**Important**: Backups are data-safe and contain only INSERT statements:
+- Does NOT contain DROP TABLE commands
+- Safe to restore without wiping existing data
+- To restore to a fresh database, first drop/recreate the database manually
 
 To restore a backup, use the `psql` command:
 
 ```bash
-# Basic restore
+# Restore to an EMPTY database (run migrations first)
 psql -h your-host -U your-user -d your-database -f backup_2026-04-22_10-30-45.sql
 
 # With connection string
@@ -436,7 +436,7 @@ psql postgresql://user:password@host:5432/database -f backup_2026-04-22_10-30-45
 psql -h your-host -U your-user -d your-database -f backup_2026-04-22_10-30-45.sql -v ON_ERROR_STOP=1
 ```
 
-**Note**: The backup includes `DROP IF EXISTS` statements, so existing database objects will be safely dropped and recreated during restore.
+**Note**: The backup contains only data (INSERT statements), not schema definitions. Run Alembic migrations first to create tables, then restore the backup data.
 
 ---
 
@@ -507,7 +507,7 @@ psql postgresql://user:password@host:5432/database -c "SELECT version();"
 - Backup files are in plain SQL format (.sql) with PostgreSQL 16.3+ optimizations
 - Backups use `--no-owner` and `--no-privileges` flags for portable restores across different PostgreSQL instances
 - All identifiers are quoted (`--quote-all-identifiers`) for maximum compatibility
-- Backups include `--clean` and `--if-exists` for safe restores: `DROP IF EXISTS` statements before CREATE statements
+- **Data-safe backups**: Contains only INSERT statements, no DROP TABLE commands (prevents accidental data loss)
 - For large databases (>1GB), consider using compressed custom format:
   - Change `-F p` to `-F c` in the backup service code
   - Restore with `pg_restore` instead of `psql`
