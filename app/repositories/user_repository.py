@@ -82,6 +82,7 @@ class UserRepository(BaseRepository[User]):
                 User.is_admin == True,  # noqa: E712
                 User.is_active == True,  # noqa: E712
                 User.is_deleted == False,  # noqa: E712
+                User.is_super_admin == False,  # noqa: E712
                 User.email.isnot(None),
             )
         )

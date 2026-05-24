@@ -79,13 +79,21 @@ class CategoryService:
 
     async def create(self, payload: CategoryCreate) -> Category:
         """Admin: create a new category with auto-generated unique slug from name."""
+        # Prevent duplicate names (case-insensitive) for non-deleted categories
+        existing = await self.repo.get_by_name(payload.name)
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Category with this name already exists",
+            )
+
         # Auto-generate unique slug from category name (ignore payload.slug if provided)
         unique_slug = await self._generate_unique_slug(payload.name)
-        
+
         # Create category data
         data = payload.model_dump()
         data["slug"] = unique_slug  # Override with auto-generated slug
-        
+
         category = Category(**data)
         return await self.repo.create(category)
 
@@ -103,7 +111,16 @@ class CategoryService:
         # Remove slug from update data if provided (slug is immutable)
         if "slug" in data:
             del data["slug"]
-        
+
+        # If name changes, ensure no active category already uses it
+        if "name" in data and data["name"] != category.name:
+            other = await self.repo.get_by_name(data["name"])
+            if other:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Another category with this name already exists",
+                )
+
         return await self.repo.update(category, data)
 
     async def delete(self, category_id: UUID) -> None:
