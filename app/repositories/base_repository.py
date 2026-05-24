@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any, Generic, Sequence, Type, TypeVar
 from uuid import UUID
 
@@ -27,7 +28,7 @@ class BaseRepository(Generic[ModelT]):
     async def get_by_id(self, id: UUID) -> ModelT | None:
         """Return a single record by primary key, or None."""
         result = await self.db.execute(
-            select(self.model).where(self.model.id == id, self.model.is_deleted == False)
+            select(self.model).where(self.model.id == id)
         )
         return result.scalars().first()
 
@@ -75,3 +76,17 @@ class BaseRepository(Generic[ModelT]):
         """Delete *obj* from the database and flush."""
         await self.db.delete(obj)
         await self.db.flush()
+
+    async def soft_delete(self, obj: ModelT) -> ModelT:
+        """Set is_deleted=True and deleted_at=now on *obj* instead of issuing DELETE SQL.
+
+        Requires the model to have SoftDeleteMixin (is_deleted + deleted_at columns).
+        """
+        return await self.update(obj, {
+            "is_deleted": True,
+            "deleted_at": datetime.now(timezone.utc),
+        })
+
+    async def restore(self, obj: ModelT) -> ModelT:
+        """Undo a soft delete by clearing is_deleted and deleted_at."""
+        return await self.update(obj, {"is_deleted": False, "deleted_at": None})

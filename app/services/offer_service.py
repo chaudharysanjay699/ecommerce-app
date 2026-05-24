@@ -77,11 +77,24 @@ class OfferService:
         return await self.repo.update(offer, {"is_active": False})
 
     async def delete(self, offer_id: UUID) -> None:
-        """Admin: permanently delete an offer."""
+        """Admin: soft delete an offer (preserves history, can be restored)."""
         offer = await self.repo.get_by_id(offer_id)
         if not offer:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found"
             )
-        await self.repo.delete(offer)
+        await self.repo.soft_delete(offer)
+
+    async def restore(self, offer_id: UUID) -> None:
+        """Admin: restore a soft-deleted offer."""
+        offer = await self.repo.get_by_id(offer_id, include_deleted=True)
+        if not offer:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found"
+            )
+        if not offer.is_deleted:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Offer is not deleted"
+            )
+        await self.repo.restore(offer)
 

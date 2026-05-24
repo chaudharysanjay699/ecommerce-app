@@ -7,7 +7,7 @@ from sqlalchemy import Boolean, Enum, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
-from app.models.base import TimestampMixin, UUIDMixin
+from app.models.base import TimestampMixin, UUIDMixin, SoftDeleteMixin
 
 
 class CategoryType(str, enum.Enum):
@@ -17,7 +17,7 @@ class CategoryType(str, enum.Enum):
     COPY_PEN = "copy_pen"
 
 
-class Category(Base, UUIDMixin, TimestampMixin):
+class Category(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "categories"
 
     name: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -32,7 +32,6 @@ class Category(Base, UUIDMixin, TimestampMixin):
     description_hi: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     # show_in_nav=True makes this category appear in the bottom navigation bar
     show_in_nav: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -48,7 +47,7 @@ class Category(Base, UUIDMixin, TimestampMixin):
         "Category", remote_side="Category.id", back_populates="children"
     )
     children: Mapped[list["Category"]] = relationship(
-        "Category", back_populates="parent", cascade="all, delete-orphan"
+        "Category", back_populates="parent", cascade="save-update, merge"
     )
     products: Mapped[list["Product"]] = relationship("Product", back_populates="category")
 

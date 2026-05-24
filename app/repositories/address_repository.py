@@ -21,7 +21,7 @@ class AddressRepository(BaseRepository[Address]):
         """Return all saved addresses for a user, default address first."""
         result = await self.db.execute(
             select(Address)
-            .where(Address.user_id == user_id)
+            .where(Address.user_id == user_id, Address.is_deleted == False)
             .order_by(Address.is_default.desc(), Address.created_at)
         )
         return list(result.scalars().all())
@@ -32,6 +32,7 @@ class AddressRepository(BaseRepository[Address]):
             select(Address).where(
                 Address.user_id == user_id,
                 Address.is_default == True,  # noqa: E712
+                Address.is_deleted == False,
             )
         )
         return result.scalars().first()
@@ -42,6 +43,7 @@ class AddressRepository(BaseRepository[Address]):
             select(Address).where(
                 Address.id == address_id,
                 Address.user_id == user_id,
+                Address.is_deleted == False,
             )
         )
         return result.scalars().first()

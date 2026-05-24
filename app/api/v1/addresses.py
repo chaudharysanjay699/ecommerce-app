@@ -88,4 +88,4 @@ async def delete_address(
     address = await repo.get_by_user_and_id(current_user.id, address_id)
     if not address:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Address not found")
-    await repo.delete(address)
+    await repo.soft_delete(address)

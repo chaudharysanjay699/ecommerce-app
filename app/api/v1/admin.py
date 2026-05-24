@@ -464,7 +464,10 @@ async def list_all_categories(
         )
         categories = result.scalars().all()
     
-    # Filter out deleted children from all categories
+    # Detach all objects from the session before filtering children in-memory.
+    # Without expunge, reassigning `category.children` would cause SQLAlchemy
+    # to UPDATE parent_id=NULL for removed children (or issue DELETE with delete-orphan).
+    db.expunge_all()
     for category in categories:
         category.children = [child for child in category.children if not child.is_deleted]
     

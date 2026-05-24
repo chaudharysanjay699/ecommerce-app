@@ -94,6 +94,14 @@ class Settings(BaseSettings):
     # Server URL (for constructing file URLs dynamically)
     SERVER_URL: str = "http://localhost:8000"  # Override in production
 
+    # AWS / CloudWatch logging
+    # Leave blank to disable CloudWatch (console-only logging)
+    AWS_ACCESS_KEY_ID: str = ""
+    AWS_SECRET_ACCESS_KEY: str = ""
+    AWS_REGION: str = "ap-south-1"
+    CLOUDWATCH_LOG_GROUP: str = "vidharthi-store"
+    CLOUDWATCH_LOG_STREAM: str = "api-errors"
+
 
 @lru_cache
 def get_settings() -> Settings:
