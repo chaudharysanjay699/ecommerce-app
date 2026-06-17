@@ -74,7 +74,10 @@ async def get_dashboard_stats(
         active_users = result.scalar_one()
         
         # Get total products
-        total_products = await ProductRepository(db).where(Product.is_deleted == False).count()
+        result = await db.execute(
+            select(func.count()).select_from(Product).where(Product.is_deleted == False)
+        )
+        total_products = result.scalar_one()
 
         result = await db.execute(
             select(func.count())
@@ -84,8 +87,10 @@ async def get_dashboard_stats(
         out_of_stock_products = result.scalar_one()
         
         # Get order statistics
-        total_orders = await OrderRepository(db).where(Order.is_deleted == False).count()
-        total_orders = await OrderRepository(db).where(Order.is_deleted == False).count()
+        result = await db.execute(
+            select(func.count()).select_from(Order).where(Order.is_deleted == False)
+        )
+        total_orders = result.scalar_one()
         
         # Get total revenue from delivered orders
         result = await db.execute(
