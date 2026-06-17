@@ -88,7 +88,7 @@ async def get_dashboard_stats(
         
         # Get order statistics
         result = await db.execute(
-            select(func.count()).select_from(Order).where(Order.is_deleted == False)
+            select(func.count()).select_from(Order)
         )
         total_orders = result.scalar_one()
         
