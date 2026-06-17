@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 import sys
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI, Request, status
+from sqlalchemy import text
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -14,24 +15,11 @@ import uvicorn
 
 from app.api.v1 import api_router
 from app.core.config import settings
+from app.core.logging_setup import configure_logging
 from app.core.middleware import ExceptionHandlerMiddleware
 
-# Configure logging with robust fallback
-log_dir = Path("logs")
-handlers = [logging.StreamHandler(sys.stdout)]
-
-try:
-    log_dir.mkdir(parents=True, exist_ok=True)
-    file_handler = logging.FileHandler(log_dir / "app.log", encoding="utf-8")
-    handlers.append(file_handler)
-except (PermissionError, OSError) as e:
-    print(f"Warning: Could not create log file: {e}. Using console logging only.", file=sys.stderr)
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=handlers,
-)
+# Initialise logging (console + file + CloudWatch) before anything else
+configure_logging()
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +34,7 @@ async def lifespan(app: FastAPI):
         # Test database connection
         from app.core.database import engine
         async with engine.begin() as conn:
-            await conn.execute("SELECT 1")
+            await conn.execute(text("SELECT 1"))
         logger.info("Database connection verified")
     except Exception as e:
         logger.error("Database connection failed during startup: %s", e)
@@ -85,7 +73,7 @@ def create_application() -> FastAPI:
     )
 
     # ── Global Exception Handlers ────────────────────────────────────────────
-    
+
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
         """Handle validation errors gracefully."""
@@ -99,12 +87,14 @@ def create_application() -> FastAPI:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content={"detail": exc.errors()},
         )
-    
+
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
-        """Catch-all handler for any unhandled exceptions."""
+        """Catch-all for exceptions that bypass the middleware (e.g. during response streaming)."""
+        request_id = getattr(getattr(request, "state", None), "request_id", "unknown")
         logger.error(
-            "Global exception handler caught: %s on %s %s",
+            "[%s] Global handler caught %s on %s %s",
+            request_id,
             type(exc).__name__,
             request.method,
             request.url.path,
@@ -113,8 +103,8 @@ def create_application() -> FastAPI:
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
-                "detail": "An unexpected error occurred. Please try again later.",
-                "error_type": type(exc).__name__,
+                "detail": "An unexpected error occurred. The issue has been logged.",
+                "request_id": request_id,
             },
         )
 
@@ -152,7 +142,7 @@ def create_application() -> FastAPI:
         try:
             from app.core.database import engine
             async with engine.begin() as conn:
-                await conn.execute("SELECT 1")
+                await conn.execute(text("SELECT 1"))
             health_status["database"] = "connected"
         except Exception as e:
             logger.error("Health check: database connection failed - %s", e)

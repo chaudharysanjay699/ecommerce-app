@@ -26,6 +26,13 @@ class CategoryRepository(BaseRepository[Category]):
         )
         return result.scalars().first()
 
+    async def get_by_name(self, name: str) -> Category | None:
+        """Return a category by name (case-insensitive), excluding deleted ones."""
+        result = await self.db.execute(
+            select(Category).where(func.lower(Category.name) == name.lower(), Category.is_deleted == False)
+        )
+        return result.scalars().first()
+
     async def get_by_slug_including_deleted(self, slug: str) -> Category | None:
         """Return a category by its URL slug, including soft-deleted ones."""
         result = await self.db.execute(

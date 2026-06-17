@@ -6,10 +6,10 @@ from sqlalchemy import Boolean, ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
-from app.models.base import TimestampMixin, UUIDMixin
+from app.models.base import TimestampMixin, UUIDMixin, SoftDeleteMixin
 
 
-class Address(Base, UUIDMixin, TimestampMixin):
+class Address(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
     """Saved delivery addresses belonging to a user."""
 
     __tablename__ = "addresses"

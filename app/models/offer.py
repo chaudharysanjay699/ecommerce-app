@@ -7,10 +7,10 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
-from app.models.base import TimestampMixin, UUIDMixin
+from app.models.base import TimestampMixin, UUIDMixin, SoftDeleteMixin
 
 
-class Offer(Base, UUIDMixin, TimestampMixin):
+class Offer(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "offers"
 
     product_id: Mapped[uuid.UUID] = mapped_column(
