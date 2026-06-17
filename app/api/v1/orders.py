@@ -32,7 +32,7 @@ async def list_my_orders(
     current_user: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=500, ge=1, le=1000),
+    limit: int = Query(default=5000, ge=1, le=10000),
 ):
     """Return the authenticated user's order history."""
     return await OrderService(db).list_user_orders(current_user.id, skip, limit)

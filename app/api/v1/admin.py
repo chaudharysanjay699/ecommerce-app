@@ -134,7 +134,7 @@ async def list_users(
     _: Admin,
     db: DB,
     skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=500, ge=1, le=1000),
+    limit: int = Query(default=5000, ge=1, le=10000),
 ):
     """Return a paginated list of users (excludes deleted and super-admin users)."""
     from app.repositories.user_repository import UserRepository
@@ -183,7 +183,7 @@ async def list_all_orders(
     _: Admin,
     db: DB,
     skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=500, ge=1, le=1000),
+    limit: int = Query(default=5000, ge=1, le=10000),
 ):
     """Return all orders across all users (paginated)."""
     return await OrderService(db).admin_list_orders(skip, limit)
@@ -301,7 +301,7 @@ async def list_all_products(
     _: Admin,
     db: DB,
     skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=500, ge=1, le=1000),
+    limit: int = Query(default=5000, ge=1, le=10000),
 ):
     """Return all products (including inactive) for admin management with category."""
     from app.repositories.product_repository import ProductRepository
@@ -356,7 +356,7 @@ async def list_out_of_stock(
     _: Admin,
     db: DB,
     skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=500, ge=1, le=1000),
+    limit: int = Query(default=5000, ge=1, le=10000),
 ):
     """Return all products that are currently out of stock."""
     from app.repositories.product_repository import ProductRepository
@@ -621,7 +621,7 @@ async def list_offers(
     _: Admin,
     db: DB,
     skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=500, ge=1, le=1000),
+    limit: int = Query(default=5000, ge=1, le=10000),
 ):
     """Return all active offers."""
     return await OfferService(db).list_active(skip, limit)
