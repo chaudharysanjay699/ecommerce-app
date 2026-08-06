@@ -80,6 +80,11 @@ async def get_dashboard_stats(
         total_products = result.scalar_one()
 
         result = await db.execute(
+            select(func.sum((Product.price * Product.stock))).where(Product.is_deleted == False)
+        )
+        total_products_price = result.scalar_one() or 0.0
+
+        result = await db.execute(
             select(func.count())
             .select_from(Product)
             .where(Product.is_out_of_stock == True)
@@ -120,6 +125,7 @@ async def get_dashboard_stats(
             "total_users": total_users,
             "active_users": active_users,
             "total_products": total_products,
+            "total_products_price": float(total_products_price),
             "out_of_stock_products": out_of_stock_products,
             "total_orders": total_orders,
             "total_revenue": float(total_revenue),
