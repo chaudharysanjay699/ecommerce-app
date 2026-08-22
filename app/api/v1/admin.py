@@ -794,7 +794,7 @@ async def update_app_settings(
     """Update application settings."""
     from app.repositories.app_settings_repository import AppSettingsRepository
     
-    update_data = payload.model_dump(exclude_unset=True)
+    update_data = payload.model_dump(exclude_unset=True, mode="json")
     updated = await AppSettingsRepository(db).update_settings(update_data)
     await db.commit()
     return updated

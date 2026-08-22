@@ -64,6 +64,12 @@ class AppSettings(Base, UUIDMixin, TimestampMixin):
         default=None,
         comment="List of delivery charge tiers based on order amount",
     )
+    holiday_delivery_dates: Mapped[list | None] = mapped_column(
+        JSON,
+        nullable=True,
+        default=None,
+        comment="Holiday dates and their next delivery dates",
+    )
 
     # ── Vegetable Order Time Window (hours in UTC) ────────────────────────────
     veg_order_start_hour: Mapped[int] = mapped_column(

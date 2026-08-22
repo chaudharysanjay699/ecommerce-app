@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from uuid import UUID
 
 from pydantic import Field, field_validator
@@ -107,6 +108,7 @@ class OrderOut(TimestampSchema):
     subtotal: float
     delivery_charge: float
     total: float
+    delivery_date: date
     delivery_address: str
     notes: str | None
     cancel_reason: str | None

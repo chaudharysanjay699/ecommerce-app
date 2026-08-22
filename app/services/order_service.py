@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -116,11 +116,17 @@ class OrderService:
 
         # ── Vegetable time-window check ──────────────────────────────────────
         now_utc = datetime.now(timezone.utc)
+        now_ist = now_utc + timedelta(hours=5, minutes=30)
+        delivery_date = now_ist.date()
+        for holiday in settings.holiday_delivery_dates or []:
+            if holiday.get("holiday_date") == delivery_date.isoformat():
+                delivery_date = datetime.strptime(
+                    holiday["next_delivery_date"], "%Y-%m-%d"
+                ).date()
+                break
+
         if settings.veg_order_enabled:
             # Convert UTC to IST (UTC + 5:30)
-            from datetime import timedelta
-            ist_offset = timedelta(hours=5, minutes=30)
-            now_ist = now_utc + ist_offset
             ist_hour = now_ist.hour
             
             for item in cart.items:
@@ -211,6 +217,7 @@ class OrderService:
             subtotal=subtotal,
             delivery_charge=delivery_charge,
             total=total,
+            delivery_date=delivery_date,
             delivery_address=delivery_address,
             notes=payload.notes,
             invoice_number=invoice_number,

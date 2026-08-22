@@ -1,7 +1,9 @@
 """Schemas for application settings."""
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from datetime import date
+
+from pydantic import BaseModel, Field, model_validator
 
 
 class DeliveryChargeTier(BaseModel):
@@ -9,6 +11,17 @@ class DeliveryChargeTier(BaseModel):
     min_price: float = Field(..., ge=0, description="Minimum order amount")
     max_price: float | None = Field(None, ge=0, description="Maximum order amount (None for unlimited)")
     delivery_charge: float = Field(..., ge=0, description="Delivery charge for this tier")
+
+
+class HolidayDeliveryDate(BaseModel):
+    holiday_date: date
+    next_delivery_date: date
+
+    @model_validator(mode="after")
+    def validate_next_delivery_date(self):
+        if self.next_delivery_date <= self.holiday_date:
+            raise ValueError("next_delivery_date must be after holiday_date")
+        return self
 
 
 class AppSettingsOut(BaseModel):
@@ -36,6 +49,7 @@ class AppSettingsOut(BaseModel):
 
     # Delivery Charges
     delivery_charge_tiers: list[DeliveryChargeTier] | None = None
+    holiday_delivery_dates: list[HolidayDeliveryDate] | None = None
 
     # Vegetable Order Time Window
     veg_order_start_hour: int = 5
@@ -79,6 +93,7 @@ class AppSettingsUpdate(BaseModel):
 
     # Delivery Charges
     delivery_charge_tiers: list[DeliveryChargeTier] | None = None
+    holiday_delivery_dates: list[HolidayDeliveryDate] | None = None
 
     # Vegetable Order Time Window
     veg_order_start_hour: int | None = Field(None, ge=0, le=23)
@@ -103,6 +118,7 @@ class AppSettingsPublic(BaseModel):
     store_address: str | None = None
 
     delivery_charge_tiers: list[DeliveryChargeTier] | None = None
+    holiday_delivery_dates: list[HolidayDeliveryDate] | None = None
 
     veg_order_start_hour: int = 5
     veg_order_end_hour: int = 9
