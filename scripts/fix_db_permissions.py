@@ -13,7 +13,7 @@ import sys
 import asyncpg
 
 # ── Config ────────────────────────────────────────────────────────────────────
-RDS_HOST     = "vidharthi-store.cn6ms82i6v4t.ap-south-1.rds.amazonaws.com"
+RDS_HOST     = "vidharthi-store-new-2.cn6ms82i6v4t.ap-south-1.rds.amazonaws.com"
 RDS_PORT     = 5432
 RDS_DATABASE = "vidharthi_store"          # <-- change to your new database name
 APP_USER     = "readonly_vidharthi_store"  # <-- user the app connects as
