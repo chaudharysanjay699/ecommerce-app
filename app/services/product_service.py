@@ -104,7 +104,7 @@ class CategoryService:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Category not found"
             )
-        data = payload.model_dump(exclude_none=True)
+        data = payload.model_dump(exclude_unset=True)
         if not data:
             return category
         
