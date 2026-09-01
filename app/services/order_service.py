@@ -118,10 +118,10 @@ class OrderService:
         now_utc = datetime.now(timezone.utc)
         now_ist = now_utc + timedelta(hours=5, minutes=30)
         delivery_date = now_ist.date()
-        for holiday in settings.holiday_delivery_dates or []:
-            if holiday.get("holiday_date") == delivery_date.isoformat():
+        for unavailable in settings.unavailable_delivery_dates or []:
+            if unavailable.get("holiday_date") == delivery_date.isoformat():
                 delivery_date = datetime.strptime(
-                    holiday["next_delivery_date"], "%Y-%m-%d"
+                    unavailable["next_delivery_date"], "%Y-%m-%d"
                 ).date()
                 break
 
@@ -217,7 +217,7 @@ class OrderService:
             subtotal=subtotal,
             delivery_charge=delivery_charge,
             total=total,
-            delivery_date=delivery_date,
+            expected_delivery_date=delivery_date,
             delivery_address=delivery_address,
             notes=payload.notes,
             invoice_number=invoice_number,

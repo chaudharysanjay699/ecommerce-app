@@ -108,7 +108,7 @@ class OrderOut(TimestampSchema):
     subtotal: float
     delivery_charge: float
     total: float
-    delivery_date: date
+    expected_delivery_date: date
     delivery_address: str
     notes: str | None
     cancel_reason: str | None

@@ -49,7 +49,7 @@ class AppSettingsOut(BaseModel):
 
     # Delivery Charges
     delivery_charge_tiers: list[DeliveryChargeTier] | None = None
-    holiday_delivery_dates: list[HolidayDeliveryDate] | None = None
+    unavailable_delivery_dates: list[HolidayDeliveryDate] | None = None
 
     # Vegetable Order Time Window
     veg_order_start_hour: int = 5
@@ -93,7 +93,7 @@ class AppSettingsUpdate(BaseModel):
 
     # Delivery Charges
     delivery_charge_tiers: list[DeliveryChargeTier] | None = None
-    holiday_delivery_dates: list[HolidayDeliveryDate] | None = None
+    unavailable_delivery_dates: list[HolidayDeliveryDate] | None = None
 
     # Vegetable Order Time Window
     veg_order_start_hour: int | None = Field(None, ge=0, le=23)
@@ -118,7 +118,7 @@ class AppSettingsPublic(BaseModel):
     store_address: str | None = None
 
     delivery_charge_tiers: list[DeliveryChargeTier] | None = None
-    holiday_delivery_dates: list[HolidayDeliveryDate] | None = None
+    unavailable_delivery_dates: list[HolidayDeliveryDate] | None = None
 
     veg_order_start_hour: int = 5
     veg_order_end_hour: int = 9

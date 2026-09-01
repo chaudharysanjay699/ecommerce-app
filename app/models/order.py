@@ -3,7 +3,7 @@ from __future__ import annotations
 import enum
 import uuid
 
-from sqlalchemy import Enum, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Date, Enum, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -39,6 +39,7 @@ class Order(Base, UUIDMixin, TimestampMixin):
     invoice_number: Mapped[str | None] = mapped_column(String(50), unique=True, index=True, nullable=True)
     invoice_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     shipping_label_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    expected_delivery_date: Mapped[object] = mapped_column(Date, nullable=False)
 
     user: Mapped["User"] = relationship("User", back_populates="orders")
     items: Mapped[list["OrderItem"]] = relationship(
