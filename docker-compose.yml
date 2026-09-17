@@ -22,15 +22,15 @@ services:
       start_period: 10s
 
   # ── Alembic migration runner (runs once then exits) ───────────────────────
-  migrate:
-    build: .
-    command: alembic upgrade head
-    env_file:
-      - .env
-    depends_on:
-      db:
-        condition: service_healthy
-    restart: "no"
+  # migrate:
+  #   build: .
+  #   command: alembic upgrade head
+  #   env_file:
+  #     - .env
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #   restart: "no"
 
   # ── FastAPI application ───────────────────────────────────────────────────
   api:
