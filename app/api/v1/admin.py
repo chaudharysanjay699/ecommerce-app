@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
@@ -247,11 +247,23 @@ async def get_admin_order_invoice(
     order_id: UUID,
     _: Admin,
     db: DB,
+    language: Literal["en", "hi"] = Query(
+        default="en", description="Invoice language: English (default) or Hindi"
+    ),
 ):
-    """Admin: return the invoice PDF for any order."""
+    """Admin: return the invoice in English PDF or Hindi print-ready HTML."""
     order = await OrderService(db).admin_get_order(order_id)
     if not order.invoice_url:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not generated yet")
+    if language == "hi":
+        from app.repositories.app_settings_repository import AppSettingsRepository
+        from app.services.pdf_service import build_invoice_html
+
+        app_settings = await AppSettingsRepository(db).get_settings()
+        return HTMLResponse(
+            content=build_invoice_html(order, app_settings=app_settings, language=language),
+            headers={"Content-Disposition": f'inline; filename="invoice_{str(order.id)[:8]}.html"'},
+        )
     filepath = Path(settings.UPLOAD_DIR) / "pdfs" / f"invoice_{order.id}.pdf"
     if not filepath.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice file not found")
@@ -267,11 +279,27 @@ async def get_admin_order_shipping_label(
     order_id: UUID,
     _: Admin,
     db: DB,
+    language: Literal["en", "hi"] = Query(
+        default="en", description="Shipping label language: English (default) or Hindi"
+    ),
 ):
-    """Admin: return the shipping label PDF for any order."""
+    """Admin: return the shipping label in English PDF or Hindi print-ready HTML."""
     order = await OrderService(db).admin_get_order(order_id)
     if not order.shipping_label_url:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shipping label not generated yet")
+    if language == "hi":
+        from app.repositories.app_settings_repository import AppSettingsRepository
+        from app.services.pdf_service import _build_shipping_label_html
+
+        app_settings = await AppSettingsRepository(db).get_settings()
+        return HTMLResponse(
+            content=_build_shipping_label_html(
+                order,
+                store_name=app_settings.store_name,
+                language=language,
+            ),
+            headers={"Content-Disposition": f'inline; filename="shipping_label_{str(order.id)[:8]}.html"'},
+        )
     filepath = Path(settings.UPLOAD_DIR) / "pdfs" / f"shipping_label_{order.id}.pdf"
     if not filepath.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shipping label file not found")

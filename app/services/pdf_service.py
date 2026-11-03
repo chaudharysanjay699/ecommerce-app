@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import os
+from html import escape
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -32,9 +33,86 @@ def _safe(val: Any, default: str = "") -> str:
 
 # ── Invoice HTML (GST-compliant) ──────────────────────────────────────────────
 
-def _build_invoice_pdf_html(order: Any, store_name: str | None = None,
-                            app_settings: Any | None = None) -> str:
-    """Build a production-ready, India GST-compliant tax invoice HTML."""
+def build_invoice_html(order: Any, store_name: str | None = None,
+                       app_settings: Any | None = None, language: str = "en") -> str:
+    """Build a print-ready, India GST-compliant tax invoice HTML."""
+    labels = {
+        "en": {
+            "tax_invoice": "Tax Invoice",
+            "invoice_number": "Invoice #",
+            "date": "Date",
+            "order_id": "Order ID",
+            "sold_by": "Sold By",
+            "bill_to": "Bill To",
+            "ship_to": "Ship To",
+            "phone": "Phone",
+            "email": "Email",
+            "state": "State",
+            "code": "Code",
+            "product": "Product",
+            "hsn": "HSN",
+            "quantity": "Qty",
+            "rate": "Rate",
+            "discount_abbrev": "Disc.",
+            "taxable": "Taxable",
+            "gst_rate": "GST%",
+            "cgst_abbrev": "CGST",
+            "sgst_abbrev": "SGST",
+            "total": "Total",
+            "subtotal_before_tax": "Subtotal (before tax):",
+            "discount": "Discount:",
+            "cgst": "CGST:",
+            "sgst": "SGST:",
+            "delivery_charge": "Delivery Charge:",
+            "grand_total": "Grand Total:",
+            "payment_method": "Payment Method:",
+            "payment_status": "Payment Status:",
+            "terms": "Terms &amp; Conditions",
+            "authorised_signatory": "Authorised Signatory",
+            "thank_you": "Thank you for shopping with",
+            "computer_generated": (
+                "This is a computer-generated invoice and does not require a physical signature."
+            ),
+        },
+        "hi": {
+            "tax_invoice": "कर चालान",
+            "invoice_number": "चालान संख्या",
+            "date": "दिनांक",
+            "order_id": "ऑर्डर आईडी",
+            "sold_by": "विक्रेता",
+            "bill_to": "बिल प्राप्तकर्ता",
+            "ship_to": "डिलीवरी का पता",
+            "phone": "फोन",
+            "email": "ईमेल",
+            "state": "राज्य",
+            "code": "कोड",
+            "product": "उत्पाद",
+            "hsn": "एचएसएन",
+            "quantity": "मात्रा",
+            "rate": "दर",
+            "discount_abbrev": "छूट",
+            "taxable": "कर योग्य राशि",
+            "gst_rate": "GST%",
+            "cgst_abbrev": "केंद्रीय GST",
+            "sgst_abbrev": "राज्य GST",
+            "total": "कुल",
+            "subtotal_before_tax": "कर से पहले उप-योग:",
+            "discount": "छूट:",
+            "cgst": "केंद्रीय GST:",
+            "sgst": "राज्य GST:",
+            "delivery_charge": "डिलीवरी शुल्क:",
+            "grand_total": "कुल राशि:",
+            "payment_method": "भुगतान का तरीका:",
+            "payment_status": "भुगतान की स्थिति:",
+            "terms": "नियम और शर्तें",
+            "authorised_signatory": "अधिकृत हस्ताक्षरकर्ता",
+            "thank_you": "से खरीदारी करने के लिए धन्यवाद",
+            "computer_generated": (
+                "यह कंप्यूटर द्वारा बनाया गया चालान है और इस पर भौतिक हस्ताक्षर की आवश्यकता नहीं है।"
+            ),
+        },
+    }[language]
+    is_hindi = language == "hi"
 
     # ── Seller details ────────────────────────────────────────────────────
     s = app_settings
@@ -46,9 +124,14 @@ def _build_invoice_pdf_html(order: Any, store_name: str | None = None,
     seller_pan = _safe(getattr(s, "store_pan", None))
     seller_state = _safe(getattr(s, "store_state", None))
     seller_state_code = _safe(getattr(s, "store_state_code", None))
-    invoice_terms = _safe(getattr(s, "invoice_terms", None),
-                          "Goods once sold will not be taken back or exchanged. "
-                          "E&OE - Errors and Omissions Excepted.")
+    default_terms = (
+        "एक बार बेचा गया सामान वापस या बदला नहीं जाएगा। "
+        "त्रुटियों और चूकों के लिए क्षमा।"
+        if is_hindi
+        else "Goods once sold will not be taken back or exchanged. "
+        "E&OE - Errors and Omissions Excepted."
+    )
+    invoice_terms = _safe(getattr(s, "invoice_terms", None), default_terms)
 
     # ── Buyer details ─────────────────────────────────────────────────────
     customer_name = order.user.full_name if hasattr(order, "user") and order.user else "N/A"
@@ -66,6 +149,22 @@ def _build_invoice_pdf_html(order: Any, store_name: str | None = None,
         created = order.created_at.strftime("%d %b %Y, %I:%M %p")
     payment_method = _safe(getattr(order, "payment_method", None), "Cash on Delivery")
     payment_status = _safe(getattr(order, "payment_status", None), "Pending")
+    if is_hindi:
+        payment_methods_hi = {
+            "cash on delivery": "कैश ऑन डिलीवरी",
+            "cod": "कैश ऑन डिलीवरी",
+            "online": "ऑनलाइन",
+            "upi": "यूपीआई",
+        }
+        payment_statuses_hi = {
+            "pending": "लंबित",
+            "paid": "भुगतान किया गया",
+            "failed": "विफल",
+            "refunded": "वापस किया गया",
+            "completed": "पूर्ण",
+        }
+        payment_method = payment_methods_hi.get(payment_method.lower(), payment_method)
+        payment_status = payment_statuses_hi.get(payment_status.lower(), payment_status)
 
     # ── Line items ────────────────────────────────────────────────────────
     items_rows = ""
@@ -76,7 +175,14 @@ def _build_invoice_pdf_html(order: Any, store_name: str | None = None,
     total_tax = 0.0
 
     for idx, item in enumerate(order.items, 1):
-        product_name = item.product.name if item.product else str(item.product_id)
+        if item.product:
+            product_name = (
+                getattr(item.product, "name_hi", None) or item.product.name
+                if is_hindi
+                else item.product.name
+            )
+        else:
+            product_name = str(item.product_id)
         hsn = _safe(getattr(item, "hsn_code", None), "-")
         qty = item.quantity
         rate = float(item.unit_price)
@@ -113,26 +219,27 @@ def _build_invoice_pdf_html(order: Any, store_name: str | None = None,
     if seller_address:
         seller_details += f"{seller_address}<br/>"
     if seller_phone:
-        seller_details += f"Phone: {seller_phone}<br/>"
+        seller_details += f"{labels['phone']}: {seller_phone}<br/>"
     if seller_email:
-        seller_details += f"Email: {seller_email}<br/>"
+        seller_details += f"{labels['email']}: {seller_email}<br/>"
     if seller_gstin:
         seller_details += f"<strong>GSTIN:</strong> {seller_gstin}<br/>"
     if seller_pan:
         seller_details += f"<strong>PAN:</strong> {seller_pan}<br/>"
     if seller_state:
-        state_line = f"State: {seller_state}"
+        state_line = f"{labels['state']}: {seller_state}"
         if seller_state_code:
-            state_line += f" (Code: {seller_state_code})"
+            state_line += f" ({labels['code']}: {seller_state_code})"
         seller_details += state_line
 
     return f"""<!DOCTYPE html>
-<html>
+<html lang="{'hi' if is_hindi else 'en'}">
 <head>
 <meta charset="UTF-8">
 <style>
     @page {{ size: A4; margin: 15mm; }}
-    body {{ font-family: Helvetica, Arial, sans-serif; color: #333; font-size: 11px; margin: 0; padding: 0; }}
+    body {{ font-family: {'"Noto Sans Devanagari", "Nirmala UI", Mangal,' if is_hindi else ''} Helvetica, Arial, sans-serif; color: #333; font-size: 11px; margin: 0; padding: 0; }}
+    @media print {{ body {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }} }}
 
     /* Header */
     .inv-header {{ border-bottom: 3px solid #2E7D32; padding-bottom: 8px; margin-bottom: 10px; }}
@@ -184,11 +291,11 @@ def _build_invoice_pdf_html(order: Any, store_name: str | None = None,
                     <div class="inv-title">{seller_name}</div>
                 </td>
                 <td style="width:40%; text-align:right">
-                    <div class="inv-subtitle">Tax Invoice</div>
+                    <div class="inv-subtitle">{labels['tax_invoice']}</div>
                     <div style="font-size:11px; color:#555; margin-top:4px;">
-                        <strong>Invoice #:</strong> {invoice_number}<br/>
-                        <strong>Date:</strong> {created}<br/>
-                        <strong>Order ID:</strong> {str(order.id)[:8].upper()}
+                        <strong>{labels['invoice_number']}:</strong> {invoice_number}<br/>
+                        <strong>{labels['date']}:</strong> {created}<br/>
+                        <strong>{labels['order_id']}:</strong> {str(order.id)[:8].upper()}
                     </div>
                 </td>
             </tr>
@@ -199,23 +306,23 @@ def _build_invoice_pdf_html(order: Any, store_name: str | None = None,
     <table class="info-table">
         <tr>
             <td style="width:33%; border-right:1px solid #ddd;">
-                <div class="info-label">Sold By</div>
+                <div class="info-label">{labels['sold_by']}</div>
                 <div class="info-val">{seller_details}</div>
             </td>
             <td style="width:33%; border-right:1px solid #ddd; padding-left:12px;">
-                <div class="info-label">Bill To</div>
+                <div class="info-label">{labels['bill_to']}</div>
                 <div class="info-val">
                     <strong>{customer_name}</strong><br/>
-                    Phone: {customer_phone}<br/>
-                    {f"Email: {customer_email}<br/>" if customer_email else ""}
+                    {labels['phone']}: {customer_phone}<br/>
+                    {f"{labels['email']}: {customer_email}<br/>" if customer_email else ""}
                 </div>
             </td>
             <td style="width:34%; padding-left:12px;">
-                <div class="info-label">Ship To</div>
+                <div class="info-label">{labels['ship_to']}</div>
                 <div class="info-val">
                     <strong>{customer_name}</strong><br/>
                     {order.delivery_address}<br/>
-                    Phone: {customer_phone}
+                    {labels['phone']}: {customer_phone}
                 </div>
             </td>
         </tr>
@@ -226,16 +333,16 @@ def _build_invoice_pdf_html(order: Any, store_name: str | None = None,
         <thead>
             <tr>
                 <th style="width:4%">#</th>
-                <th style="width:20%; text-align:left">Product</th>
-                <th style="width:8%">HSN</th>
-                <th style="width:5%">Qty</th>
-                <th style="width:9%">Rate</th>
-                <th style="width:9%">Disc.</th>
-                <th style="width:11%">Taxable</th>
-                <th style="width:7%">GST%</th>
-                <th style="width:9%">CGST</th>
-                <th style="width:9%">SGST</th>
-                <th style="width:9%">Total</th>
+                <th style="width:20%; text-align:left">{labels['product']}</th>
+                <th style="width:8%">{labels['hsn']}</th>
+                <th style="width:5%">{labels['quantity']}</th>
+                <th style="width:9%">{labels['rate']}</th>
+                <th style="width:9%">{labels['discount_abbrev']}</th>
+                <th style="width:11%">{labels['taxable']}</th>
+                <th style="width:7%">{labels['gst_rate']}</th>
+                <th style="width:9%">{labels['cgst_abbrev']}</th>
+                <th style="width:9%">{labels['sgst_abbrev']}</th>
+                <th style="width:9%">{labels['total']}</th>
             </tr>
         </thead>
         <tbody>
@@ -246,36 +353,36 @@ def _build_invoice_pdf_html(order: Any, store_name: str | None = None,
     <!-- TOTALS -->
     <table class="totals-table">
         <tr>
-            <td class="label">Subtotal (before tax):</td>
+            <td class="label">{labels['subtotal_before_tax']}</td>
             <td class="value">Rs.{total_taxable:.2f}</td>
         </tr>
         <tr>
-            <td class="label">Discount:</td>
+            <td class="label">{labels['discount']}</td>
             <td class="value">- Rs.{total_discount:.2f}</td>
         </tr>
         <tr>
-            <td class="label">CGST:</td>
+            <td class="label">{labels['cgst']}</td>
             <td class="value">Rs.{total_cgst:.2f}</td>
         </tr>
         <tr>
-            <td class="label">SGST:</td>
+            <td class="label">{labels['sgst']}</td>
             <td class="value">Rs.{total_sgst:.2f}</td>
         </tr>
         <tr>
-            <td class="label">Delivery Charge:</td>
+            <td class="label">{labels['delivery_charge']}</td>
             <td class="value">Rs.{float(order.delivery_charge):.2f}</td>
         </tr>
         <tr class="grand">
-            <td class="label">Grand Total:</td>
+            <td class="label">{labels['grand_total']}</td>
             <td class="value">Rs.{float(order.total):.2f}</td>
         </tr>
     </table>
 
     <!-- PAYMENT -->
     <div class="payment-box">
-        <span><strong>Payment Method:</strong> {payment_method}</span>
+        <span><strong>{labels['payment_method']}</strong> {payment_method}</span>
         &nbsp;&nbsp;|&nbsp;&nbsp;
-        <span><strong>Payment Status:</strong> {payment_status}</span>
+        <span><strong>{labels['payment_status']}</strong> {payment_status}</span>
     </div>
 
     <!-- FOOTER -->
@@ -283,19 +390,19 @@ def _build_invoice_pdf_html(order: Any, store_name: str | None = None,
         <table style="width:100%">
             <tr>
                 <td style="width:60%; vertical-align:top;">
-                    <div class="info-label">Terms &amp; Conditions</div>
+                    <div class="info-label">{labels['terms']}</div>
                     <div class="terms">{invoice_terms}</div>
                 </td>
                 <td style="width:40%; vertical-align:top;">
                     <div class="sig">
                         For <strong>{seller_name}</strong><br/><br/><br/>
-                        Authorised Signatory
+                        {labels['authorised_signatory']}
                     </div>
                 </td>
             </tr>
         </table>
-        <div class="thanks">Thank you for shopping with {seller_name}!</div>
-        <div class="no-sig">This is a computer-generated invoice and does not require a physical signature.</div>
+        <div class="thanks">{labels['thank_you']} {seller_name}!</div>
+        <div class="no-sig">{labels['computer_generated']}</div>
     </div>
 
 </body>
@@ -304,34 +411,62 @@ def _build_invoice_pdf_html(order: Any, store_name: str | None = None,
 
 # ── Shipping Label HTML ───────────────────────────────────────────────────────
 
-def _build_shipping_label_html(order: Any, store_name: str | None = None) -> str:
+def _build_shipping_label_html(
+    order: Any,
+    store_name: str | None = None,
+    language: str = "en",
+) -> str:
+    is_hindi = language == "hi"
     store = store_name or settings.PROJECT_NAME
 
     customer_name = order.user.full_name if hasattr(order, "user") and order.user else "N/A"
     customer_phone = order.user.phone if hasattr(order, "user") and order.user else "N/A"
 
     items_summary = ", ".join(
-        f"{item.product.name if item.product else 'Item'} x{item.quantity}"
+        f"{(item.product.name_hi if is_hindi and item.product.name_hi else item.product.name) if item.product else 'वस्तु' if is_hindi else 'Item'} x{item.quantity}"
         for item in order.items
     )
+    labels = {
+        "en": {
+            "shipping_label": "SHIPPING LABEL",
+            "order": "ORDER",
+            "ship_to": "Ship To",
+            "phone": "Phone",
+            "order_date": "Order Date",
+            "items": "Items",
+            "total": "TOTAL",
+            "cash_on_delivery": "CASH ON DELIVERY",
+        },
+        "hi": {
+            "shipping_label": "शिपिंग लेबल",
+            "order": "ऑर्डर",
+            "ship_to": "यहाँ भेजें",
+            "phone": "फोन",
+            "order_date": "ऑर्डर की तारीख",
+            "items": "वस्तुएँ",
+            "total": "कुल",
+            "cash_on_delivery": "डिलीवरी पर नकद",
+        },
+    }[language]
 
     created = ""
     if hasattr(order, "created_at") and order.created_at:
         created = order.created_at.strftime("%d %b %Y")
 
     return f"""<!DOCTYPE html>
-<html>
+<html lang="{language}">
 <head>
 <meta charset="UTF-8">
 <style>
-    @page {{ size: A4; margin: 15mm; }}
-    body {{ font-family: Helvetica, Arial, sans-serif; color: #333; font-size: 13px; margin: 0; padding: 0; }}
-    .label {{ border: 3px solid #222; padding: 20px; width: 100%; }}
+    @page {{ size: A4; margin: 10mm; }}
+    * {{ box-sizing: border-box; }}
+    body {{ font-family: {'"Noto Sans Devanagari", "Nirmala UI", Mangal,' if is_hindi else ''} Helvetica, Arial, sans-serif; color: #333; font-size: 13px; margin: 0; padding: 0; }}
+    .label {{ border: 3px solid #222; padding: 16px; width: 100%; max-width: 100%; overflow-wrap: anywhere; }}
     .store-header {{ text-align: center; border-bottom: 3px dashed #222; padding-bottom: 14px; margin-bottom: 14px; }}
     .store-header h2 {{ margin: 0; font-size: 26px; letter-spacing: 2px; }}
     .store-header p {{ margin: 4px 0 0; color: #666; font-size: 13px; }}
     .order-id {{ text-align: center; font-size: 20px; font-weight: bold; background: #eee; padding: 10px; margin-bottom: 16px; letter-spacing: 2px; }}
-    table.info {{ width: 100%; border-collapse: collapse; margin-bottom: 10px; }}
+    table.info {{ width: 100%; table-layout: fixed; border-collapse: collapse; margin-bottom: 10px; }}
     table.info td {{ padding: 6px 8px; vertical-align: top; font-size: 13px; }}
     .label-key {{ color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; }}
     .label-val {{ color: #222; font-size: 14px; }}
@@ -344,23 +479,23 @@ def _build_shipping_label_html(order: Any, store_name: str | None = None) -> str
 <body>
     <div class="label">
         <div class="store-header">
-            <h2>{store}</h2>
-            <p>SHIPPING LABEL</p>
+            <h2>{escape(str(store))}</h2>
+            <p>{labels['shipping_label']}</p>
         </div>
 
-        <div class="order-id">ORDER #{str(order.id)[:8].upper()}</div>
+        <div class="order-id">{labels['order']} #{str(order.id)[:8].upper()}</div>
 
         <table class="info">
             <tr>
                 <td style="width:50%">
-                    <span class="label-key">Ship To</span><br/>
-                    <span class="label-val"><strong>{customer_name}</strong><br/>
-                    {order.delivery_address}<br/>
-                    Phone: {customer_phone}</span>
+                    <span class="label-key">{labels['ship_to']}</span><br/>
+                    <span class="label-val"><strong>{escape(str(customer_name))}</strong><br/>
+                    {escape(str(order.delivery_address))}<br/>
+                    {labels['phone']}: {escape(str(customer_phone))}</span>
                 </td>
                 <td style="width:50%; text-align:right">
-                    <span class="label-key">Order Date</span><br/>
-                    <span class="label-val">{created}</span>
+                    <span class="label-key">{labels['order_date']}</span><br/>
+                    <span class="label-val">{escape(created)}</span>
                 </td>
             </tr>
         </table>
@@ -368,15 +503,15 @@ def _build_shipping_label_html(order: Any, store_name: str | None = None) -> str
         <table class="info">
             <tr>
                 <td>
-                    <span class="label-key">Items ({len(order.items)})</span>
-                    <div class="items-box">{items_summary}</div>
+                    <span class="label-key">{labels['items']} ({len(order.items)})</span>
+                    <div class="items-box">{escape(items_summary)}</div>
                 </td>
             </tr>
         </table>
 
-        <div class="total-box">Rs.{order.total:.2f}</div>
+        <div class="total-box">{labels['total']}: Rs.{order.total:.2f}</div>
 
-        <div class="cod-badge">CASH ON DELIVERY</div>
+        <div class="cod-badge">{labels['cash_on_delivery']}</div>
     </div>
 </body>
 </html>"""
@@ -398,7 +533,7 @@ async def generate_invoice_pdf(order: Any, store_name: str | None = None,
     filename = f"invoice_{order.id}.pdf"
     filepath = PDF_DIR / filename
 
-    html = _build_invoice_pdf_html(order, store_name, app_settings)
+    html = build_invoice_html(order, store_name, app_settings)
 
     import asyncio
     loop = asyncio.get_running_loop()
