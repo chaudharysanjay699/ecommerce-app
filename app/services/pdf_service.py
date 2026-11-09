@@ -237,8 +237,8 @@ def build_invoice_html(order: Any, store_name: str | None = None,
 <head>
 <meta charset="UTF-8">
 <style>
-    @page {{ size: A4; margin: 15mm; }}
-    body {{ font-family: {'"Noto Sans Devanagari", "Nirmala UI", Mangal,' if is_hindi else ''} Helvetica, Arial, sans-serif; color: #333; font-size: 11px; margin: 0; padding: 0; }}
+    @page {{ size: A4; margin: {'0' if is_hindi else '15mm'}; }}
+    body {{ font-family: {'"Noto Sans Devanagari", "Nirmala UI", Mangal,' if is_hindi else ''} Helvetica, Arial, sans-serif; color: #333; font-size: 11px; margin: 0; padding: {'15mm' if is_hindi else '0'}; }}
     @media print {{ body {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }} }}
 
     /* Header */
@@ -401,7 +401,7 @@ def build_invoice_html(order: Any, store_name: str | None = None,
                 </td>
             </tr>
         </table>
-        <div class="thanks">{labels['thank_you']} {seller_name}!</div>
+        <div class="thanks">{seller_name + ' ' + labels['thank_you'] if is_hindi else labels['thank_you'] + ' ' + seller_name}!</div>
         <div class="no-sig">{labels['computer_generated']}</div>
     </div>
 
@@ -458,9 +458,9 @@ def _build_shipping_label_html(
 <head>
 <meta charset="UTF-8">
 <style>
-    @page {{ size: A4; margin: 10mm; }}
+    @page {{ size: A4; margin: {'0' if is_hindi else '10mm'}; }}
     * {{ box-sizing: border-box; }}
-    body {{ font-family: {'"Noto Sans Devanagari", "Nirmala UI", Mangal,' if is_hindi else ''} Helvetica, Arial, sans-serif; color: #333; font-size: 13px; margin: 0; padding: 0; }}
+    body {{ font-family: {'"Noto Sans Devanagari", "Nirmala UI", Mangal,' if is_hindi else ''} Helvetica, Arial, sans-serif; color: #333; font-size: 13px; margin: 0; padding: {'10mm' if is_hindi else '0'}; }}
     .label {{ border: 3px solid #222; padding: 16px; width: 100%; max-width: 100%; overflow-wrap: anywhere; }}
     .store-header {{ text-align: center; border-bottom: 3px dashed #222; padding-bottom: 14px; margin-bottom: 14px; }}
     .store-header h2 {{ margin: 0; font-size: 26px; letter-spacing: 2px; }}
