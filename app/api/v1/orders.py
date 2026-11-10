@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -64,11 +64,23 @@ async def get_order_invoice(
     order_id: UUID,
     current_user: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    language: Literal["en", "hi"] = Query(
+        default="en", description="Invoice language: English (default) or Hindi"
+    ),
 ):
-    """Return the invoice PDF for a user's order."""
+    """Return the invoice in English PDF or Hindi print-ready HTML."""
     order = await OrderService(db).get_order(order_id, current_user.id)
     if not order.invoice_url:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not generated yet")
+    if language == "hi":
+        from app.repositories.app_settings_repository import AppSettingsRepository
+        from app.services.pdf_service import build_invoice_html
+
+        app_settings = await AppSettingsRepository(db).get_settings()
+        return HTMLResponse(
+            content=build_invoice_html(order, app_settings=app_settings, language=language),
+            headers={"Content-Disposition": f'inline; filename="invoice_{str(order.id)[:8]}.html"'},
+        )
     filepath = Path(settings.UPLOAD_DIR) / "pdfs" / f"invoice_{order.id}.pdf"
     if not filepath.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice file not found")

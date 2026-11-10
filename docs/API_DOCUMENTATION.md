@@ -546,6 +546,26 @@ Authorization: Bearer <token>
 
 ---
 
+### Get Order Invoice
+```
+GET /orders/{order_id}/invoice
+Authorization: ******
+```
+Optional query parameter: `language=en` (default) or `language=hi`.
+
+- English returns the existing invoice PDF.
+- Hindi returns a print-ready HTML invoice; open it in a browser and use the browser's Print command. Product names use the Hindi name when one is available, otherwise the English name is used.
+- Admins can use the same `language` parameter on `GET /admin/orders/{order_id}/invoice`.
+
+### Get Shipping Label (admin)
+```
+GET /admin/orders/{order_id}/shipping-label
+Authorization: ******
+```
+Optional query parameter: `language=en` (default) or `language=hi`. English returns the existing shipping label PDF; Hindi returns print-ready HTML. Product names use the Hindi name when one is available, otherwise the English name is used.
+
+---
+
 ## 9. Order Tracking
 
 ### Get Tracking Timeline (customer)
